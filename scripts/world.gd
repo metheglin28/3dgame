@@ -17,6 +17,9 @@ func _ready() -> void:
 	spawner.spawn_function = _spawn_player
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	# Only ever fires for a client: if the host quits or crashes, don't leave
+	# us stuck staring at a dead scene -- bail back to the menu automatically.
+	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 
 	if multiplayer.is_server():
 		# MultiplayerSpawner replays already-spawned nodes to peers that join later,
@@ -36,6 +39,11 @@ func _on_peer_disconnected(id: int) -> void:
 	if player_nodes.has(id):
 		player_nodes[id].queue_free()
 		player_nodes.erase(id)
+
+
+func _on_server_disconnected() -> void:
+	GameState.release_mouse()
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
 func _spawn_for_peer(id: int) -> void:

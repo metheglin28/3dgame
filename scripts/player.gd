@@ -55,6 +55,7 @@ const LAND_SQUASH_THRESHOLD := -3.0
 @onready var name_label: Label3D = $NameLabel
 @onready var hold_point: Marker3D = $HoldPoint
 @onready var prompt_label: Label = $HUD/InteractPrompt
+@onready var leave_button: Button = $HUD/LeaveButton
 
 
 func _ready() -> void:
@@ -65,6 +66,7 @@ func _ready() -> void:
 	$HUD.visible = is_local
 	if is_local:
 		GameState.capture_mouse()
+		leave_button.pressed.connect(_on_leave_pressed)
 	# _physics_process always stays enabled, even on non-server peers: it's also
 	# where the *local* player reads Input and streams it to the server (see
 	# below). Only the actual movement simulation later in that function is
@@ -92,6 +94,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		_request_interact.rpc_id(1)
 	if event.is_action_pressed("throw"):
 		_request_throw.rpc_id(1)
+
+
+func _on_leave_pressed() -> void:
+	# Works the same whether this player is the host or a joined client:
+	# closing our own peer either shuts the server down (dropping everyone
+	# else too) or just disconnects us, and either way we land back on the menu.
+	GameState.release_mouse()
+	NetworkManager.leave_game()
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
 func _process(delta: float) -> void:
