@@ -10,7 +10,7 @@ const SPEED := 2.0
 const PAUSE_TIME := 2.0
 const SPEECH_DURATION := 2.5
 
-const LINES := [
+const DEFAULT_LINES: Array[String] = [
 	"I used to be an adventurer, then I took a nap instead.",
 	"Have you tried turning yourself off and on again?",
 	"This grass isn't going to stand on itself.",
@@ -19,6 +19,10 @@ const LINES := [
 	"Don't mind me, just doing NPC things.",
 ]
 
+@export var npc_name: String = "Some Guy"
+@export var lines: Array[String] = []
+
+@onready var name_label: Label3D = $NameLabel
 @onready var speech_label: Label3D = $SpeechLabel
 
 var _home: Vector3
@@ -28,6 +32,9 @@ var _pause_timer := 0.0
 
 func _ready() -> void:
 	add_to_group("npc")
+	name_label.text = npc_name
+	if lines.is_empty():
+		lines = DEFAULT_LINES
 	speech_label.visible = false
 	if multiplayer.is_server():
 		_home = global_position
@@ -40,7 +47,7 @@ func _ready() -> void:
 func on_interact(_by: Node3D) -> void:
 	if not multiplayer.is_server():
 		return
-	var line: String = LINES[randi() % LINES.size()]
+	var line: String = lines[randi() % lines.size()]
 	_say.rpc(line)
 
 

@@ -32,6 +32,15 @@ var _pending_sprint: bool = false
 var _jump_buffer_timer: float = 0.0
 var _coyote_timer: float = 0.0
 
+# Purely cosmetic squash-and-stretch, driven off observed vertical position
+# rather than the server's real velocity -- that way it works identically
+# whether this Player instance is being physically simulated (the server) or
+# just rendered from the snapshot (everyone else), with no networking needed.
+var _prev_y: float = 0.0
+var _fall_speed: float = 0.0
+var _time_since_y_change: float = 0.0
+const LAND_SQUASH_THRESHOLD := -3.0
+
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var spring_arm: SpringArm3D = $CameraPivot/SpringArm3D
@@ -85,7 +94,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_request_throw.rpc_id(1)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_update_squash_stretch(delta)
 	if peer_id != multiplayer.get_unique_id():
 		return
 	# Local-only "am I looking at something?" check purely for the UI prompt text;
@@ -222,3 +232,30 @@ func apply_remote_state(state: Dictionary) -> void:
 	# (Their own camera pivot, if any, was already updated locally from mouse input.)
 	global_position = state["pos"]
 	rotation.y = state["rot"]
+
+
+func _update_squash_stretch(delta: float) -> void:
+	# global_position.y only actually changes once per physics tick (for the
+	# server) or once per incoming snapshot (for everyone else) -- both much
+	# rarer than _process's idle-rate delta. Comparing against the last frame
+	# unconditionally would read near-zero "velocity" on every frame where
+	# position hasn't moved yet, falsely detecting a landing on every idle
+	# frame throughout an entire fall. Only sample once position actually
+	# changes, using the real elapsed time since the last sample.
+	_time_since_y_change += delta
+	if is_equal_approx(global_position.y, _prev_y):
+		return
+	var vertical_speed := (global_position.y - _prev_y) / _time_since_y_change
+	_prev_y = global_position.y
+	_time_since_y_change = 0.0
+	if vertical_speed < LAND_SQUASH_THRESHOLD:
+		_fall_speed = vertical_speed
+	elif _fall_speed < LAND_SQUASH_THRESHOLD and absf(vertical_speed) < 1.0:
+		_play_land_squash()
+		_fall_speed = 0.0
+
+
+func _play_land_squash() -> void:
+	mesh.scale = Vector3(1.25, 0.7, 1.25)
+	var tween := create_tween()
+	tween.tween_property(mesh, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
