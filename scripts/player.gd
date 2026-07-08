@@ -125,11 +125,22 @@ func _physics_process(delta: float) -> void:
 			item.global_transform = hold_point.global_transform
 
 
-@rpc("any_peer", "call_remote", "unreliable_ordered")
+## Godot reports sender id 0 (not a real remote sender) when an RPC ends up being
+## invoked directly in-process rather than delivered over the network -- which is
+## exactly what happens when the host controls its own player, since peer 1 calling
+## rpc_id(1, ...) never actually goes over the wire. Treat that case as "it's me".
+func _verified_sender_id() -> int:
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	return sender_id
+
+
+@rpc("any_peer", "call_local", "unreliable_ordered")
 func _send_input(move: Vector2, yaw: float, jump_pressed: bool) -> void:
 	if not multiplayer.is_server():
 		return
-	if multiplayer.get_remote_sender_id() != peer_id:
+	if _verified_sender_id() != peer_id:
 		return
 	_pending_move = move
 	camera_yaw = yaw
@@ -137,22 +148,22 @@ func _send_input(move: Vector2, yaw: float, jump_pressed: bool) -> void:
 		_pending_jump = true
 
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _request_interact() -> void:
 	if not multiplayer.is_server():
 		return
-	if multiplayer.get_remote_sender_id() != peer_id:
+	if _verified_sender_id() != peer_id:
 		return
 	var target := _server_side_look_target()
 	if target and target.has_method("interact"):
 		target.interact(self)
 
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _request_throw() -> void:
 	if not multiplayer.is_server():
 		return
-	if multiplayer.get_remote_sender_id() != peer_id:
+	if _verified_sender_id() != peer_id:
 		return
 	if carried_item_path == NodePath(""):
 		return
