@@ -6,8 +6,16 @@ extends CharacterBody3D
 ## enough that this stays feel-good without needing client-side prediction.
 
 const SPEED := 5.5
+const SPRINT_MULTIPLIER := 1.7
+const ACCEL := 10.0
+const DECEL := 12.0
 const JUMP_VELOCITY := 6.5
+const COYOTE_TIME := 0.15
+const JUMP_BUFFER_TIME := 0.15
 const MOUSE_SENSITIVITY := 0.0035
+const ZOOM_STEP := 0.6
+const MIN_ZOOM := 1.5
+const MAX_ZOOM := 8.0
 const INTERACT_RANGE := 3.0
 
 @export var peer_id: int = 1
@@ -20,7 +28,9 @@ var carried_item_path: NodePath = NodePath("")
 
 # Input latched by the owning client, applied by the server.
 var _pending_move: Vector2 = Vector2.ZERO
-var _pending_jump: bool = false
+var _pending_sprint: bool = false
+var _jump_buffer_timer: float = 0.0
+var _coyote_timer: float = 0.0
 
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var camera_pivot: Node3D = $CameraPivot
@@ -60,6 +70,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pitch = clamp(camera_pitch - event.relative.y * MOUSE_SENSITIVITY, -1.2, 1.0)
 		camera_pivot.rotation.y = camera_yaw
 		spring_arm.rotation.x = camera_pitch
+	if event is InputEventMouseButton and event.pressed:
+		# Zoom is purely a local viewing preference, so it never touches the network.
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			spring_arm.spring_length = clamp(spring_arm.spring_length - ZOOM_STEP, MIN_ZOOM, MAX_ZOOM)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			spring_arm.spring_length = clamp(spring_arm.spring_length + ZOOM_STEP, MIN_ZOOM, MAX_ZOOM)
 	if event.is_action_pressed("toggle_mouse"):
 		GameState.toggle_mouse()
 	if event.is_action_pressed("interact"):
@@ -94,28 +110,34 @@ func _physics_process(delta: float) -> void:
 			Input.get_action_strength("move_back") - Input.get_action_strength("move_forward")
 		)
 		var jump_pressed := Input.is_action_just_pressed("jump")
-		_send_input.rpc_id(1, input_dir, camera_yaw, jump_pressed)
+		var sprint_held := Input.is_key_pressed(KEY_SHIFT)
+		_send_input.rpc_id(1, input_dir, camera_yaw, camera_pitch, jump_pressed, sprint_held)
 
 	if not multiplayer.is_server():
 		return
 
 	# Server-side simulation for this player, driven by the last input it sent us.
+	_coyote_timer = COYOTE_TIME if is_on_floor() else maxf(_coyote_timer - delta, 0.0)
+	_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
+
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
-	if _pending_jump and is_on_floor():
+	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
 		velocity.y = JUMP_VELOCITY
-	_pending_jump = false
+		_jump_buffer_timer = 0.0
+		_coyote_timer = 0.0
 
+	var speed := SPEED * SPRINT_MULTIPLIER if _pending_sprint else SPEED
 	var basis_yaw := Basis(Vector3.UP, camera_yaw)
 	var direction := (basis_yaw * Vector3(_pending_move.x, 0, _pending_move.y))
 	if direction.length() > 0.001:
 		direction = direction.normalized()
-		velocity.x = direction.x * SPEED
-		velocity.z = direction.z * SPEED
+		velocity.x = move_toward(velocity.x, direction.x * speed, speed * ACCEL * delta)
+		velocity.z = move_toward(velocity.z, direction.z * speed, speed * ACCEL * delta)
 		rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.z), 12.0 * delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED * delta * 6.0)
-		velocity.z = move_toward(velocity.z, 0, SPEED * delta * 6.0)
+		velocity.x = move_toward(velocity.x, 0, speed * DECEL * delta)
+		velocity.z = move_toward(velocity.z, 0, speed * DECEL * delta)
 
 	move_and_slide()
 
@@ -137,15 +159,21 @@ func _verified_sender_id() -> int:
 
 
 @rpc("any_peer", "call_local", "unreliable_ordered")
-func _send_input(move: Vector2, yaw: float, jump_pressed: bool) -> void:
+func _send_input(move: Vector2, yaw: float, pitch: float, jump_pressed: bool, sprint_held: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	if _verified_sender_id() != peer_id:
 		return
 	_pending_move = move
+	_pending_sprint = sprint_held
 	camera_yaw = yaw
+	# Needed so the server's own interact raycast (see _server_side_look_target)
+	# looks the same direction the real player on this client is actually aiming,
+	# both horizontally and vertically.
+	camera_pivot.rotation.y = yaw
+	spring_arm.rotation.x = pitch
 	if jump_pressed:
-		_pending_jump = true
+		_jump_buffer_timer = JUMP_BUFFER_TIME
 
 
 @rpc("any_peer", "call_local", "reliable")
