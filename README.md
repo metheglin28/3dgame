@@ -53,11 +53,16 @@ boxes) on purpose — the point is the interaction, not the art.
 - **An interaction system** — look at something interactable and a prompt
   appears telling you what pressing E will do.
 - **Pickup props** (the red boxes) — walk up, press E to grab, click to throw them.
-- **A door with a lever** — press E on the lever to swing it open or shut; it
-  physically blocks the way when closed, and the wall around it has no gaps to
-  sneak through.
-- **Two NPCs** who wander around aimlessly and say a random one-liner each
-  (with their own personality/lines) when you talk to them.
+- **A door with a lever** — press E on the lever to swing it open or shut.
+- **Three NPCs** who wander around and say a random one-liner each (with their
+  own personality/lines) when you talk to them. One of them is lost.
+- **A 120x120 fixed map** (hand-placed, identical every game) with a small
+  town in the center — houses, a shop, a well, lampposts, signposts — and a
+  distinct biome in each quadrant: a forest (NE), a farm with a barn and
+  silo (NW), a hand-designed canyon maze with a prize at its dead end (SE),
+  and snowy hills with a snowman (SW). All layout lives in
+  `scripts/map_decorations.gd` as literal coordinates — tweak numbers there
+  to move things around.
 
 ## Project layout
 
