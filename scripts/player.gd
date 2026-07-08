@@ -61,6 +61,12 @@ const LAND_SQUASH_THRESHOLD := -3.0
 func _ready() -> void:
 	add_to_group("players")
 	name_label.text = display_name
+	# A newly-joined peer's chosen name hasn't necessarily round-tripped back to
+	# whoever is spawning this node yet (spawning happens right when the ENet
+	# connection completes; name registration is a separate RPC that arrives
+	# slightly later), so `display_name` is very often still the "Player"
+	# fallback at this point. Self-correct once/if the real name shows up.
+	NetworkManager.player_connected.connect(_on_player_registered)
 	var is_local := peer_id == multiplayer.get_unique_id()
 	camera.current = is_local
 	$HUD.visible = is_local
@@ -94,6 +100,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_request_interact.rpc_id(1)
 	if event.is_action_pressed("throw"):
 		_request_throw.rpc_id(1)
+
+
+func _on_player_registered(id: int, registered_name: String) -> void:
+	if id == peer_id:
+		display_name = registered_name
+		name_label.text = display_name
 
 
 func _on_leave_pressed() -> void:
