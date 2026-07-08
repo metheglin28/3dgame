@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/door.tscn" id="2"]
@@ -22,6 +22,18 @@ size = Vector3(8, 3, 0.3)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wall"]
 albedo_color = Color(0.75, 0.72, 0.65, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gap_left"]
+size = Vector3(0.8, 3, 0.3)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gap_left"]
+size = Vector3(0.8, 3, 0.3)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gap_right"]
+size = Vector3(2, 3, 0.3)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gap_right"]
+size = Vector3(2, 3, 0.3)
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -78,6 +90,28 @@ shape = SubResource("BoxShape3D_wall")
 
 [node name="Door1" parent="." instance=ExtResource("2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0, 0)
+
+[node name="WallGapLeft" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6, 1.5, 0)
+collision_layer = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallGapLeft"]
+mesh = SubResource("BoxMesh_gap_left")
+surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallGapLeft"]
+shape = SubResource("BoxShape3D_gap_left")
+
+[node name="WallGapRight" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1.5, 0)
+collision_layer = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallGapRight"]
+mesh = SubResource("BoxMesh_gap_right")
+surface_material_override/0 = SubResource("StandardMaterial3D_wall")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallGapRight"]
+shape = SubResource("BoxShape3D_gap_right")
 
 [node name="NPC1" parent="." instance=ExtResource("3")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 6)
