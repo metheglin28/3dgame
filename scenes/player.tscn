@@ -123,3 +123,12 @@ offset_bottom = 64.0
 horizontal_alignment = 2
 theme_override_font_sizes/font_size = 14
 text = "[Esc] to free the mouse first"
+
+[node name="PlayerListLabel" type="Label" parent="HUD"]
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 220.0
+offset_bottom = 200.0
+theme_override_font_sizes/font_size = 16
+text = "Players Online:"

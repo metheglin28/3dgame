@@ -32,25 +32,32 @@ boxes) on purpose — the point is the interaction, not the art.
 | Action | Key |
 | --- | --- |
 | Move | WASD |
+| Sprint | Hold Shift |
 | Look around | Mouse |
+| Zoom camera in/out | Mouse wheel |
 | Jump | Space |
 | Interact / talk / pick up | E |
 | Throw held item | Left mouse click |
 | Free the mouse cursor | Esc |
+| Leave to main menu | HUD button, top-right (after pressing Esc) |
 
 ## What's in this vertical slice
 
 - **LAN multiplayer** — one player hosts, others join by IP. The host's machine
   is authoritative (it runs all the "physics"); everyone else just displays what
-  the host tells them, which keeps things simple and consistent.
-- **A player character** you can walk and look around with in third person.
+  the host tells them, which keeps things simple and consistent. If the host
+  leaves or crashes, joined clients automatically drop back to the main menu
+  instead of getting stuck.
+- **A player character** you can walk and look around with in third person,
+  with a landing squash animation and a "Players Online" list in the corner.
 - **An interaction system** — look at something interactable and a prompt
   appears telling you what pressing E will do.
 - **Pickup props** (the red boxes) — walk up, press E to grab, click to throw them.
 - **A door with a lever** — press E on the lever to swing it open or shut; it
-  physically blocks the way when closed.
-- **An NPC** who wanders around aimlessly and says a random one-liner when you
-  talk to it.
+  physically blocks the way when closed, and the wall around it has no gaps to
+  sneak through.
+- **Two NPCs** who wander around aimlessly and say a random one-liner each
+  (with their own personality/lines) when you talk to them.
 
 ## Project layout
 
@@ -68,8 +75,18 @@ Natural next additions, roughly in order of "easy win":
 - More/varied interactable props (switches, crates you can stack, a ball you
   can kick).
 - A simple inventory instead of a one-item hold point.
-- More NPCs with different personalities, maybe a quest-ish request.
-- Simple animations (even just squash-and-stretch on the capsule) instead of
-  a static mesh.
+- More NPCs with quest-ish requests instead of just one-liners.
 - A lobby/ready-up screen before dropping players into the world.
 - Persisting a save (e.g. which doors are open) if you want sessions to matter.
+
+## A note on testing
+
+This project was developed with a real Godot 4.3 editor binary available for
+automated headless testing (`godot --headless`), including running two actual
+separate host+client processes with simulated input to verify the networking
+end to end. If you're picking this up somewhere that binary isn't available,
+you're back to playtesting by hand — everything here has been verified to
+work, but any *new* changes to movement, networking, or interaction logic are
+easy to get subtly wrong (see the git history for the kinds of bugs that
+turned up: silent RPC failures, sign errors in facing/aim math, and a couple
+of scene-file syntax mistakes that Godot doesn't even warn about).

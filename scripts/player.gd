@@ -56,6 +56,7 @@ const LAND_SQUASH_THRESHOLD := -3.0
 @onready var hold_point: Marker3D = $HoldPoint
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
+@onready var player_list_label: Label = $HUD/PlayerListLabel
 
 
 func _ready() -> void:
@@ -72,6 +73,9 @@ func _ready() -> void:
 	$HUD.visible = is_local
 	if is_local:
 		GameState.capture_mouse()
+		NetworkManager.player_connected.connect(func(_id, _name): _refresh_player_list())
+		NetworkManager.player_disconnected.connect(func(_id): _refresh_player_list())
+		_refresh_player_list()
 		leave_button.pressed.connect(_on_leave_pressed)
 	# _physics_process always stays enabled, even on non-server peers: it's also
 	# where the *local* player reads Input and streams it to the server (see
@@ -115,6 +119,13 @@ func _on_leave_pressed() -> void:
 	GameState.release_mouse()
 	NetworkManager.leave_game()
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
+func _refresh_player_list() -> void:
+	var lines := ["Players Online:"]
+	for id in NetworkManager.player_names:
+		lines.append("- " + str(NetworkManager.player_names[id]))
+	player_list_label.text = "\n".join(lines)
 
 
 func _process(delta: float) -> void:
