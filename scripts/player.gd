@@ -36,7 +36,13 @@ var _coyote_timer: float = 0.0
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var spring_arm: SpringArm3D = $CameraPivot/SpringArm3D
 @onready var camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
-@onready var interact_ray: RayCast3D = $CameraPivot/SpringArm3D/Camera3D/InteractRay
+# The interact ray deliberately does NOT live under the third-person Camera3D:
+# the spring arm holds that camera several meters behind the player, so a short
+# ray cast from there would never reach back past the player's own body, let
+# alone anything they're looking at. AimPivot mirrors the camera's yaw/pitch
+# but stays at the player's head position, so the ray actually reaches forward.
+@onready var aim_pivot: Node3D = $CameraPivot/AimPivot
+@onready var interact_ray: RayCast3D = $CameraPivot/AimPivot/InteractRay
 @onready var name_label: Label3D = $NameLabel
 @onready var hold_point: Marker3D = $HoldPoint
 @onready var prompt_label: Label = $HUD/InteractPrompt
@@ -50,16 +56,10 @@ func _ready() -> void:
 	$HUD.visible = is_local
 	if is_local:
 		GameState.capture_mouse()
-	if not multiplayer.is_server():
-		# Non-server peers never simulate physics for anyone; they just render snapshots.
-		set_physics_process(false)
-		freeze_body()
-
-
-func freeze_body() -> void:
-	# CharacterBody3D has no built-in "kinematic only" switch; simplest is to just
-	# never call move_and_slide() on it when we're not the server (see _ready above).
-	pass
+	# _physics_process always stays enabled, even on non-server peers: it's also
+	# where the *local* player reads Input and streams it to the server (see
+	# below). Only the actual movement simulation later in that function is
+	# gated behind `multiplayer.is_server()`.
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -70,6 +70,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pitch = clamp(camera_pitch - event.relative.y * MOUSE_SENSITIVITY, -1.2, 1.0)
 		camera_pivot.rotation.y = camera_yaw
 		spring_arm.rotation.x = camera_pitch
+		aim_pivot.rotation.x = camera_pitch
 	if event is InputEventMouseButton and event.pressed:
 		# Zoom is purely a local viewing preference, so it never touches the network.
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -134,7 +135,10 @@ func _physics_process(delta: float) -> void:
 		direction = direction.normalized()
 		velocity.x = move_toward(velocity.x, direction.x * speed, speed * ACCEL * delta)
 		velocity.z = move_toward(velocity.z, direction.z * speed, speed * ACCEL * delta)
-		rotation.y = lerp_angle(rotation.y, atan2(direction.x, direction.z), 12.0 * delta)
+		# atan2(direction.x, direction.z) would give the angle for a mesh whose
+		# modeled "forward" is +Z; ours (and Godot's convention generally) faces
+		# -Z, which is the exact opposite direction, hence the negation.
+		rotation.y = lerp_angle(rotation.y, atan2(-direction.x, -direction.z), 12.0 * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0, speed * DECEL * delta)
 		velocity.z = move_toward(velocity.z, 0, speed * DECEL * delta)
@@ -172,6 +176,7 @@ func _send_input(move: Vector2, yaw: float, pitch: float, jump_pressed: bool, sp
 	# both horizontally and vertically.
 	camera_pivot.rotation.y = yaw
 	spring_arm.rotation.x = pitch
+	aim_pivot.rotation.x = pitch
 	if jump_pressed:
 		_jump_buffer_timer = JUMP_BUFFER_TIME
 
