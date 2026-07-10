@@ -32,6 +32,12 @@ var _pending_sprint: bool = false
 var _jump_buffer_timer: float = 0.0
 var _coyote_timer: float = 0.0
 
+# Per-player feel multipliers, applied by the SERVER during simulation. The
+# owning client pushes its Settings values here via _set_feel (server clamps
+# them to the same ranges the options sliders allow).
+var _accel_mult: float = 1.0
+var _jump_mult: float = 1.0
+
 # Purely cosmetic squash-and-stretch, driven off observed vertical position
 # rather than the server's real velocity -- that way it works identically
 # whether this Player instance is being physically simulated (the server) or
@@ -66,6 +72,8 @@ const NET_SNAP_DISTANCE := 4.0
 @onready var hold_point: Marker3D = $Mesh/HoldPoint
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
+@onready var options_button: Button = $HUD/OptionsButton
+@onready var options_menu: Control = $HUD/OptionsMenu
 @onready var player_list_label: Label = $HUD/PlayerListLabel
 
 
@@ -87,6 +95,9 @@ func _ready() -> void:
 		NetworkManager.player_disconnected.connect(func(_id): _refresh_player_list())
 		_refresh_player_list()
 		leave_button.pressed.connect(_on_leave_pressed)
+		options_button.pressed.connect(func(): options_menu.visible = not options_menu.visible)
+		Settings.changed.connect(_apply_settings)
+		_apply_settings()
 	# _physics_process always stays enabled, even on non-server peers: it's also
 	# where the *local* player reads Input and streams it to the server (see
 	# below). Only the actual movement simulation later in that function is
@@ -97,19 +108,28 @@ func _unhandled_input(event: InputEvent) -> void:
 	if peer_id != multiplayer.get_unique_id():
 		return
 	if event is InputEventMouseMotion and GameState.mouse_captured:
-		camera_yaw -= event.relative.x * MOUSE_SENSITIVITY
-		camera_pitch = clamp(camera_pitch - event.relative.y * MOUSE_SENSITIVITY, -1.2, 1.0)
+		var sens: float = Settings.BASE_SENSITIVITY * Settings.sens_mult
+		var dy: float = event.relative.y * sens
+		if Settings.invert_y:
+			dy = -dy
+		camera_yaw -= event.relative.x * sens
+		camera_pitch = clamp(camera_pitch - dy, -1.2, 1.0)
 		camera_pivot.rotation.y = camera_yaw
 		spring_arm.rotation.x = camera_pitch
 		aim_pivot.rotation.x = camera_pitch
 	if event is InputEventMouseButton and event.pressed:
-		# Zoom is purely a local viewing preference, so it never touches the network.
+		# Zoom routes through Settings (still local-only) so the wheel and the
+		# options slider stay in sync and the preference persists.
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			spring_arm.spring_length = clamp(spring_arm.spring_length - ZOOM_STEP, MIN_ZOOM, MAX_ZOOM)
+			Settings.camera_distance = clampf(Settings.camera_distance - ZOOM_STEP, MIN_ZOOM, MAX_ZOOM)
+			Settings.notify_changed()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			spring_arm.spring_length = clamp(spring_arm.spring_length + ZOOM_STEP, MIN_ZOOM, MAX_ZOOM)
+			Settings.camera_distance = clampf(Settings.camera_distance + ZOOM_STEP, MIN_ZOOM, MAX_ZOOM)
+			Settings.notify_changed()
 	if event.is_action_pressed("toggle_mouse"):
 		GameState.toggle_mouse()
+		if GameState.mouse_captured:
+			options_menu.hide()
 	if event.is_action_pressed("interact"):
 		_request_interact.rpc_id(1)
 	if event.is_action_pressed("throw"):
@@ -120,6 +140,26 @@ func _on_player_registered(id: int, registered_name: String) -> void:
 	if id == peer_id:
 		display_name = registered_name
 		name_label.text = display_name
+
+
+## Local player only: apply Settings to the camera immediately and ship the
+## movement-feel multipliers to the server, which simulates us.
+## (Mouse sensitivity/invert are read live in _unhandled_input.)
+func _apply_settings() -> void:
+	spring_arm.spring_length = clampf(Settings.camera_distance, MIN_ZOOM, MAX_ZOOM)
+	_set_feel.rpc_id(1, Settings.accel_mult, Settings.jump_mult)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _set_feel(accel_mult: float, jump_mult: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if _verified_sender_id() != peer_id:
+		return
+	# Clamp to the same ranges the options sliders offer, so a modified client
+	# can't grant itself moon-gravity jumps.
+	_accel_mult = clampf(accel_mult, Settings.ACCEL_RANGE.x, Settings.ACCEL_RANGE.y)
+	_jump_mult = clampf(jump_mult, Settings.JUMP_RANGE.x, Settings.JUMP_RANGE.y)
 
 
 func _on_leave_pressed() -> void:
@@ -179,7 +219,7 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
 	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
-		velocity.y = JUMP_VELOCITY
+		velocity.y = JUMP_VELOCITY * _jump_mult
 		_jump_buffer_timer = 0.0
 		_coyote_timer = 0.0
 
@@ -188,8 +228,8 @@ func _physics_process(delta: float) -> void:
 	var direction := (basis_yaw * Vector3(_pending_move.x, 0, _pending_move.y))
 	if direction.length() > 0.001:
 		direction = direction.normalized()
-		velocity.x = move_toward(velocity.x, direction.x * speed, speed * ACCEL * delta)
-		velocity.z = move_toward(velocity.z, direction.z * speed, speed * ACCEL * delta)
+		velocity.x = move_toward(velocity.x, direction.x * speed, speed * ACCEL * _accel_mult * delta)
+		velocity.z = move_toward(velocity.z, direction.z * speed, speed * ACCEL * _accel_mult * delta)
 		# Only the visible MESH turns to face movement -- never the body root.
 		# The camera rig and interact ray are children of the root, so rotating
 		# the root would drag the camera around whenever you strafe (the world
@@ -198,8 +238,8 @@ func _physics_process(delta: float) -> void:
 		# forward is -Z (Godot's convention).
 		mesh.rotation.y = lerp_angle(mesh.rotation.y, atan2(-direction.x, -direction.z), 12.0 * delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0, speed * DECEL * delta)
-		velocity.z = move_toward(velocity.z, 0, speed * DECEL * delta)
+		velocity.x = move_toward(velocity.x, 0, speed * DECEL * _accel_mult * delta)
+		velocity.z = move_toward(velocity.z, 0, speed * DECEL * _accel_mult * delta)
 
 	move_and_slide()
 

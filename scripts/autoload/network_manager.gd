@@ -20,6 +20,28 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	# Handle the window's X button ourselves (see _notification below).
+	get_tree().auto_accept_quit = false
+
+
+## Closing the window while hosting must disconnect gracefully BEFORE the
+## process dies: an abruptly killed host trips an engine-level teardown crash
+## (Godot 4.3) on every connected client. A clean peer close takes the same
+## path as the Leave button, which clients handle fine.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		graceful_quit()
+
+
+func graceful_quit() -> void:
+	if multiplayer.multiplayer_peer == null:
+		get_tree().quit()
+		return
+	leave_game()
+	# Keep the process alive a few frames so ENet actually transmits the
+	# disconnect handshake before we exit.
+	await get_tree().create_timer(0.2).timeout
+	get_tree().quit()
 
 
 func host_game(player_name: String, port: int = DEFAULT_PORT) -> Error:

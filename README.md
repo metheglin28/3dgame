@@ -40,6 +40,12 @@ boxes) on purpose — the point is the interaction, not the art.
 | Throw held item | Left mouse click |
 | Free the mouse cursor | Esc |
 | Leave to main menu | HUD button, top-right (after pressing Esc) |
+| Options (sensitivity, jump, camera...) | HUD button, top-right (after pressing Esc) |
+
+Options apply live mid-game and persist to `user://settings.cfg`. Mouse
+sensitivity, invert-Y, and camera distance are local to you; movement
+snappiness and jump strength are sent to the host, which clamps them to the
+same ranges the sliders allow.
 
 ## What's in this vertical slice
 
