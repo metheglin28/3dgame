@@ -41,6 +41,14 @@ var _fall_speed: float = 0.0
 var _time_since_y_change: float = 0.0
 const LAND_SQUASH_THRESHOLD := -3.0
 
+# Latest server snapshot, rendered via exponential smoothing on non-server
+# peers so motion stays fluid even when unreliable snapshot packets bunch up.
+var _net_pos_target: Vector3
+var _net_rot_target: float = 0.0
+var _has_net_state: bool = false
+const NET_SMOOTH_RATE := 18.0
+const NET_SNAP_DISTANCE := 4.0
+
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var spring_arm: SpringArm3D = $CameraPivot/SpringArm3D
@@ -53,7 +61,9 @@ const LAND_SQUASH_THRESHOLD := -3.0
 @onready var aim_pivot: Node3D = $CameraPivot/AimPivot
 @onready var interact_ray: RayCast3D = $CameraPivot/AimPivot/InteractRay
 @onready var name_label: Label3D = $NameLabel
-@onready var hold_point: Marker3D = $HoldPoint
+# Under the mesh so carried items swing around to stay in front of the
+# character as it turns to face its movement.
+@onready var hold_point: Marker3D = $Mesh/HoldPoint
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
 @onready var player_list_label: Label = $HUD/PlayerListLabel
@@ -129,6 +139,7 @@ func _refresh_player_list() -> void:
 
 
 func _process(delta: float) -> void:
+	_smooth_to_net_state(delta)
 	_update_squash_stretch(delta)
 	if peer_id != multiplayer.get_unique_id():
 		return
@@ -155,7 +166,7 @@ func _physics_process(delta: float) -> void:
 			Input.get_action_strength("move_back") - Input.get_action_strength("move_forward")
 		)
 		var jump_pressed := Input.is_action_just_pressed("jump")
-		var sprint_held := Input.is_key_pressed(KEY_SHIFT)
+		var sprint_held := Input.is_action_pressed("sprint")
 		_send_input.rpc_id(1, input_dir, camera_yaw, camera_pitch, jump_pressed, sprint_held)
 
 	if not multiplayer.is_server():
@@ -179,10 +190,13 @@ func _physics_process(delta: float) -> void:
 		direction = direction.normalized()
 		velocity.x = move_toward(velocity.x, direction.x * speed, speed * ACCEL * delta)
 		velocity.z = move_toward(velocity.z, direction.z * speed, speed * ACCEL * delta)
-		# atan2(direction.x, direction.z) would give the angle for a mesh whose
-		# modeled "forward" is +Z; ours (and Godot's convention generally) faces
-		# -Z, which is the exact opposite direction, hence the negation.
-		rotation.y = lerp_angle(rotation.y, atan2(-direction.x, -direction.z), 12.0 * delta)
+		# Only the visible MESH turns to face movement -- never the body root.
+		# The camera rig and interact ray are children of the root, so rotating
+		# the root would drag the camera around whenever you strafe (the world
+		# swivels under your mouse) and skew the interact aim by the body's yaw.
+		# atan2(-x, -z) rather than atan2(x, z) because the mesh's modeled
+		# forward is -Z (Godot's convention).
+		mesh.rotation.y = lerp_angle(mesh.rotation.y, atan2(-direction.x, -direction.z), 12.0 * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0, speed * DECEL * delta)
 		velocity.z = move_toward(velocity.z, 0, speed * DECEL * delta)
@@ -262,10 +276,31 @@ func _server_side_look_target() -> Node:
 
 
 func apply_remote_state(state: Dictionary) -> void:
-	# Used by non-server clients to render a player purely from the server snapshot.
-	# (Their own camera pivot, if any, was already updated locally from mouse input.)
-	global_position = state["pos"]
-	rotation.y = state["rot"]
+	# Non-server peers don't apply the snapshot directly -- they store it as a
+	# target and glide toward it in _process (see _smooth_to_net_state), which
+	# hides the jitter of unreliable snapshot packets arriving unevenly.
+	_net_pos_target = state["pos"]
+	_net_rot_target = state["rot"]
+	_has_net_state = true
+
+
+func _smooth_to_net_state(delta: float) -> void:
+	if multiplayer.is_server() or not _has_net_state:
+		return
+	if global_position.distance_to(_net_pos_target) > NET_SNAP_DISTANCE:
+		# Teleport (spawn, respawn, etc.) -- don't visibly zip across the map.
+		global_position = _net_pos_target
+		mesh.rotation.y = _net_rot_target
+		return
+	var w := 1.0 - exp(-NET_SMOOTH_RATE * delta)
+	global_position = global_position.lerp(_net_pos_target, w)
+	mesh.rotation.y = lerp_angle(mesh.rotation.y, _net_rot_target, w)
+
+
+## Where this player is looking, pitch included -- the aim pivot carries the
+## camera's yaw+pitch but none of the mesh's facing. Used for throw direction.
+func look_direction() -> Vector3:
+	return -aim_pivot.global_transform.basis.z
 
 
 func _update_squash_stretch(delta: float) -> void:

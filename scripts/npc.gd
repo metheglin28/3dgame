@@ -29,6 +29,13 @@ var _home: Vector3
 var _target: Vector3
 var _pause_timer := 0.0
 
+# Latest server snapshot, smoothed toward in _process on non-server peers.
+var _net_pos_target: Vector3
+var _net_rot_target := 0.0
+var _has_net_state := false
+const NET_SMOOTH_RATE := 18.0
+const NET_SNAP_DISTANCE := 4.0
+
 
 func _ready() -> void:
 	add_to_group("npc")
@@ -94,5 +101,20 @@ func _say(line: String) -> void:
 
 
 func apply_remote_state(state: Dictionary) -> void:
-	global_position = state["pos"]
-	rotation.y = state["rot"]
+	_net_pos_target = state["pos"]
+	_net_rot_target = state["rot"]
+	_has_net_state = true
+
+
+func _process(delta: float) -> void:
+	# Same snapshot smoothing as the player (see player.gd) -- NPCs otherwise
+	# visibly stutter on clients when unreliable snapshot packets bunch up.
+	if multiplayer.is_server() or not _has_net_state:
+		return
+	if global_position.distance_to(_net_pos_target) > NET_SNAP_DISTANCE:
+		global_position = _net_pos_target
+		rotation.y = _net_rot_target
+		return
+	var w := 1.0 - exp(-NET_SMOOTH_RATE * delta)
+	global_position = global_position.lerp(_net_pos_target, w)
+	rotation.y = lerp_angle(rotation.y, _net_rot_target, w)

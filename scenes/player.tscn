@@ -43,6 +43,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -0.35)
 mesh = SubResource("BoxMesh_nose")
 surface_material_override/0 = SubResource("StandardMaterial3D_nose")
 
+[node name="HoldPoint" type="Marker3D" parent="Mesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.9)
+
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
 billboard = 1
@@ -50,9 +53,6 @@ no_depth_test = true
 font_size = 48
 outline_size = 8
 text = "Player"
-
-[node name="HoldPoint" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -0.9)
 
 [node name="CameraPivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
