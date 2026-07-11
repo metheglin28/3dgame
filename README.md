@@ -76,8 +76,15 @@ same ranges the sliders allow.
   set dressing for now, not lootable). The rooms are sized for their
   tenants: **six goblins** now live along the line (plus a lookout outside)
   — small, pointy-eared, in assorted greens from yellowish to dark moss.
-  They wander their own rooms and mouth off if you bother them. They're
-  harmless for now; combat mechanics come later. A troll is still planned.
+  They wander their own rooms and mouth off if you bother them. A troll is
+  still planned.
+- **Ragdoll combat** — nobody has health and nobody dies: getting hit just
+  cuts your controls and launches you tumbling end over end until you land,
+  skid out, and get back up. The sword ragdolls goblins, villagers, and
+  other players alike (and knocks whatever they were carrying loose), with
+  a short immunity window so one victim can't be juggled forever. Knockback
+  strength is per-weapon, so future weapons and abilities can hit softer or
+  harder.
 - **A 120x120 fixed map** (hand-placed, identical every game) with a small
   town in the center — houses, a shop, a well, lampposts, signposts — and a
   distinct biome in each quadrant: a forest (NE), a farm with a barn and

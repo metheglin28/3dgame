@@ -1,12 +1,21 @@
 extends CharacterBody3D
-## A completely harmless wandering NPC. The server drives its "AI" (walk to a random
-## nearby point, pause, repeat) and every peer renders it from the position snapshot
-## the World broadcasts each frame, same as players and items. Talking to it is
-## purely cosmetic: the server picks a random line and every peer is told to display
-## it above the NPC's head at the same time.
+## A wandering NPC. The server drives its "AI" (walk to a random nearby point,
+## pause, repeat) and every peer renders it from the position snapshot the
+## World broadcasts each frame, same as players and items. Talking to it is
+## purely cosmetic: the server picks a random line and every peer is told to
+## display it above the NPC's head at the same time.
+##
+## Combat: NPCs don't have health -- getting hit means getting RAGDOLLED
+## (apply_knockback): control cut, launched with weapon-specific force,
+## tumbling end over end until they land, then they get up and carry on. The
+## tumble angle rides the same snapshot as position so every peer sees the
+## same flip.
 
 const PAUSE_TIME := 2.0
 const SPEECH_DURATION := 2.5
+const RAGDOLL_MIN_TIME := 1.1
+const HIT_IMMUNITY := 0.8
+const TUMBLE_SPEED := 9.0
 
 const DEFAULT_LINES: Array[String] = [
 	"I used to be an adventurer, then I took a nap instead.",
@@ -26,10 +35,17 @@ const DEFAULT_LINES: Array[String] = [
 
 @onready var name_label: Label3D = $NameLabel
 @onready var speech_label: Label3D = $SpeechLabel
+@onready var mesh: MeshInstance3D = $Mesh
 
 var _home: Vector3
 var _target: Vector3
 var _pause_timer := 0.0
+
+# Ragdoll state. `tumble` is the mesh's mid-air pitch, synced to all peers.
+var tumble := 0.0
+var _ragdolled := false
+var _ragdoll_timer := 0.0
+var _hit_immunity := 0.0
 
 # Latest server snapshot, smoothed toward in _process on non-server peers.
 var _net_pos_target: Vector3
@@ -64,11 +80,45 @@ func get_interact_prompt() -> String:
 	return "Talk"
 
 
+## Server-only entry point for any weapon/ability that hits this NPC. `power`
+## is the weapon's knockback strength -- this is where "different weapons have
+## varying knockback" plugs in. Launches up-and-away, cuts AI control until
+## they've landed and the timer has run out. A short immunity window stops a
+## flying NPC being juggled indefinitely.
+func apply_knockback(dir: Vector3, power: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if _hit_immunity > 0.0:
+		return
+	_hit_immunity = HIT_IMMUNITY
+	_ragdolled = true
+	_ragdoll_timer = RAGDOLL_MIN_TIME
+	var flat := (dir * Vector3(1, 0, 1)).normalized()
+	velocity = flat * power + Vector3.UP * power * 0.6
+
+
 func _physics_process(delta: float) -> void:
+	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
-	else:
+	elif not _ragdolled:
 		velocity.y = 0.0
+
+	if _ragdolled:
+		_ragdoll_timer -= delta
+		tumble += TUMBLE_SPEED * delta
+		mesh.rotation.x = tumble
+		if is_on_floor():
+			# Skid to a stop once down; get up when the timer allows.
+			velocity.x = move_toward(velocity.x, 0.0, 14.0 * delta)
+			velocity.z = move_toward(velocity.z, 0.0, 14.0 * delta)
+			if _ragdoll_timer <= 0.0:
+				_ragdolled = false
+				tumble = 0.0
+				mesh.rotation.x = 0.0
+				_pause_timer = PAUSE_TIME # sit dazed a moment, then carry on
+		move_and_slide()
+		return
 
 	var to_target := _target - global_position
 	to_target.y = 0.0
@@ -106,6 +156,8 @@ func apply_remote_state(state: Dictionary) -> void:
 	_net_pos_target = state["pos"]
 	_net_rot_target = state["rot"]
 	_has_net_state = true
+	tumble = state["tumble"]
+	mesh.rotation.x = tumble
 
 
 func _process(delta: float) -> void:

@@ -55,7 +55,22 @@ var wearing_helmet: bool = false:
 var _swing_cooldown: float = 0.0
 const SWING_COOLDOWN := 0.5
 const SWING_RANGE := 2.6
-const SWING_PUSH := 10.0
+const SWING_PUSH := 10.0       # knockback on physics props
+const SWING_KNOCKBACK := 11.0  # knockback on characters (goblins, players)
+
+# Ragdoll state, same slapstick combat rules as NPCs (see npc.gd): no health,
+# a hit just cuts your controls and launches you tumbling until you land and
+# get back up. Simulated entirely on the server -- while ragdolled the
+# server ignores this player's streamed movement input; the owning client
+# doesn't need to know or cooperate. `tumble` (mesh pitch) rides the normal
+# per-player snapshot so every peer sees the same flip.
+var tumble := 0.0
+var ragdolled := false
+var _ragdoll_timer := 0.0
+var _hit_immunity := 0.0
+const RAGDOLL_MIN_TIME := 1.1
+const HIT_IMMUNITY := 0.8
+const TUMBLE_SPEED := 9.0
 
 # Input latched by the owning client, applied by the server.
 var _pending_move: Vector2 = Vector2.ZERO
@@ -252,9 +267,28 @@ func _physics_process(delta: float) -> void:
 	_coyote_timer = COYOTE_TIME if is_on_floor() else maxf(_coyote_timer - delta, 0.0)
 	_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
 	_swing_cooldown = maxf(_swing_cooldown - delta, 0.0)
+	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
 
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
+
+	if ragdolled:
+		# No control while flying: gravity and momentum only, tumbling all the
+		# way, then skid out and stand back up.
+		_ragdoll_timer -= delta
+		tumble += TUMBLE_SPEED * delta
+		mesh.rotation.x = tumble
+		if is_on_floor():
+			velocity.x = move_toward(velocity.x, 0.0, 14.0 * delta)
+			velocity.z = move_toward(velocity.z, 0.0, 14.0 * delta)
+			if _ragdoll_timer <= 0.0:
+				ragdolled = false
+				tumble = 0.0
+				mesh.rotation.x = 0.0
+				_play_land_squash()
+		move_and_slide()
+		return
+
 	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
 		velocity.y = JUMP_VELOCITY * _jump_mult
 		_jump_buffer_timer = 0.0
@@ -316,11 +350,35 @@ func _send_input(move: Vector2, yaw: float, pitch: float, jump_pressed: bool, sp
 		_jump_buffer_timer = JUMP_BUFFER_TIME
 
 
+## Server-only: some weapon/ability hit this player. Same rules as NPCs
+## (npc.gd): launch with weapon-specific power, cut movement control until
+## landed and recovered, brief immunity against juggling. Whatever they were
+## carrying goes flying too -- getting smacked means dropping your stuff.
+func apply_knockback(dir: Vector3, power: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if _hit_immunity > 0.0:
+		return
+	_hit_immunity = HIT_IMMUNITY
+	ragdolled = true
+	_ragdoll_timer = RAGDOLL_MIN_TIME
+	if carried_item_path != NodePath(""):
+		var item := get_node_or_null(carried_item_path)
+		if item:
+			item.carried_by = -1
+			item.freeze = false
+		carried_item_path = NodePath("")
+	var flat := (dir * Vector3(1, 0, 1)).normalized()
+	velocity = flat * power + Vector3.UP * power * 0.6
+
+
 @rpc("any_peer", "call_local", "reliable")
 func _request_interact() -> void:
 	if not multiplayer.is_server():
 		return
 	if _verified_sender_id() != peer_id:
+		return
+	if ragdolled:
 		return
 	var target := _server_side_look_target()
 	if target and target.has_method("interact"):
@@ -332,6 +390,8 @@ func _request_throw() -> void:
 	if not multiplayer.is_server():
 		return
 	if _verified_sender_id() != peer_id:
+		return
+	if ragdolled:
 		return
 	if carried_item_path != NodePath(""):
 		var item := get_node_or_null(carried_item_path)
@@ -352,7 +412,8 @@ func _request_throw() -> void:
 
 
 ## Server-only: the gameplay half of a swing. Shoves any physics prop (items,
-## snowballs) in front of us; the visual half is _play_swing on every peer.
+## snowballs) in front of us, and RAGDOLLS any character (goblin, villager,
+## other player) -- the visual half is _play_swing on every peer.
 func _do_swing_effects() -> void:
 	var forward := mesh.global_transform.basis * Vector3.FORWARD
 	var targets: Array[Node] = []
@@ -372,6 +433,19 @@ func _do_swing_effects() -> void:
 		t.freeze = false
 		var push_dir := (to_target * Vector3(1, 0, 1)).normalized()
 		t.apply_central_impulse((push_dir + Vector3.UP * 0.6).normalized() * SWING_PUSH * t.mass)
+
+	var characters: Array[Node] = []
+	characters.append_array(get_tree().get_nodes_in_group("npc"))
+	characters.append_array(get_tree().get_nodes_in_group("players"))
+	for c in characters:
+		if c == self or not c.has_method("apply_knockback"):
+			continue
+		var to_char: Vector3 = c.global_position - global_position
+		if to_char.length() > SWING_RANGE:
+			continue
+		if forward.dot(to_char.normalized()) < 0.3:
+			continue
+		c.apply_knockback((to_char * Vector3(1, 0, 1)).normalized(), SWING_KNOCKBACK)
 
 
 ## Cosmetic swing arc, played identically on every peer (reliable broadcast,
@@ -404,6 +478,8 @@ func apply_remote_state(state: Dictionary) -> void:
 	_has_net_state = true
 	wearing_hat = state["hat"]
 	wearing_helmet = state["helmet"]
+	tumble = state["tumble"]
+	mesh.rotation.x = tumble
 
 
 func _smooth_to_net_state(delta: float) -> void:
