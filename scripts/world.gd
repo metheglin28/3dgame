@@ -6,15 +6,33 @@ extends Node3D
 ## move_and_slide()/simulates RigidBody3D physics; everyone else just renders.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
+const SNOWBALL_SCENE := preload("res://scenes/snowball.tscn")
 
 @onready var players_node: Node3D = $Players
 @onready var spawner: MultiplayerSpawner = $Players/MultiplayerSpawner
 
 var player_nodes: Dictionary = {} # peer_id -> Player
 
+# Projectiles (snowballs) are spawned dynamically at runtime, so their parent
+# and MultiplayerSpawner are built in code here rather than hand-edited into
+# world.tscn -- editing world.tscn by hand is exactly what caused the earlier
+# "invisible ground" bug from a silently-dropped scene node.
+var projectiles_node: Node3D
+var projectile_spawner: MultiplayerSpawner
+var _next_projectile_id: int = 0
+
 
 func _ready() -> void:
 	spawner.spawn_function = _spawn_player
+
+	projectiles_node = Node3D.new()
+	projectiles_node.name = "Projectiles"
+	add_child(projectiles_node)
+	projectile_spawner = MultiplayerSpawner.new()
+	projectile_spawner.spawn_path = projectiles_node.get_path()
+	projectile_spawner.spawn_function = _spawn_snowball
+	projectiles_node.add_child(projectile_spawner)
+
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	# Only ever fires for a client: if the host quits or crashes, don't leave
@@ -65,16 +83,18 @@ func _spawn_player(id: int) -> Node:
 
 
 func _physics_process(_delta: float) -> void:
-	var snapshot := {"players": {}, "items": {}, "npcs": {}}
+	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}}
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
 		# (see player.gd for why).
-		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y}
+		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat}
 	for item in get_tree().get_nodes_in_group("sync_items"):
 		snapshot["items"][item.get_path()] = {"xform": item.global_transform, "held": item.carried_by}
 	for npc in get_tree().get_nodes_in_group("npc"):
 		snapshot["npcs"][npc.get_path()] = {"pos": npc.global_position, "rot": npc.rotation.y}
+	for proj in get_tree().get_nodes_in_group("sync_projectiles"):
+		snapshot["projectiles"][proj.get_path()] = {"xform": proj.global_transform}
 	_apply_snapshot.rpc(snapshot)
 
 
@@ -92,3 +112,30 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 		var npc := get_node_or_null(path)
 		if npc:
 			npc.apply_remote_state(snapshot["npcs"][path])
+	for path in snapshot["projectiles"]:
+		var proj := get_node_or_null(path)
+		if proj:
+			proj.apply_remote_state(snapshot["projectiles"][path])
+
+
+## Called by a player (server-side only, see player.gd's _request_throw) to
+## launch a snowball from their hold point. Spawned dynamically via
+## projectile_spawner so every peer gets a replicated copy.
+func spawn_snowball(thrower: Node3D) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := _next_projectile_id
+	_next_projectile_id += 1
+	var data := {"id": id, "xform": thrower.hold_point.global_transform, "peer": thrower.peer_id}
+	projectile_spawner.spawn(data)
+
+
+func _spawn_snowball(data: Dictionary) -> Node:
+	var s := SNOWBALL_SCENE.instantiate()
+	s.name = "Snowball%d" % int(data["id"])
+	s.global_transform = data["xform"]
+	if multiplayer.is_server():
+		var thrower: Node3D = player_nodes.get(int(data["peer"]))
+		if thrower:
+			s.launch_from(thrower)
+	return s

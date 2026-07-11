@@ -17,6 +17,8 @@ extends Node3D
 ##     +---------+---------+
 ##            south (-z)
 
+const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
+
 const MAP_HALF := 60.0
 
 const FOREST_CANOPY := Color(0.2, 0.5, 0.22, 1)
@@ -526,11 +528,10 @@ func _build_snowy_hills() -> void:
 	_add_rock(-36, -22, 0.7)
 	_add_rock(-20, -32, 0.5)
 
-	# The mandatory snowman.
-	_add_sphere(Vector3(-30, 0.9, -33), 1.0, SNOW_WHITE)
-	_add_sphere(Vector3(-30, 2.2, -33), 0.7, SNOW_WHITE, false)
-	_add_sphere(Vector3(-30, 3.2, -33), 0.45, SNOW_WHITE, false)
-	_add_cylinder(Vector3(-30, 3.2, -32.5), 0.02, 0.09, 0.5, Color(0.9, 0.45, 0.1), false)
+	# The mandatory snowman -- also grants the snowball-throwing power (see snowman.gd).
+	var snowman := SNOWMAN_SCENE.instantiate()
+	snowman.position = Vector3(-30, 0, -33)
+	add_child(snowman)
 
 
 # --- underground: surface ground collision (with 4 entrance-sized holes) ------

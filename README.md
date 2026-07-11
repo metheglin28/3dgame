@@ -37,7 +37,7 @@ boxes) on purpose — the point is the interaction, not the art.
 | Zoom camera in/out | Mouse wheel |
 | Jump | Space |
 | Interact / talk / pick up | E |
-| Throw held item | Left mouse click |
+| Throw held item / snowball | Left mouse click |
 | Free the mouse cursor | Esc |
 | Leave to main menu | HUD button, top-right (after pressing Esc) |
 | Options (sensitivity, jump, camera...) | HUD button, top-right (after pressing Esc) |
@@ -62,6 +62,9 @@ same ranges the sliders allow.
 - **A door with a lever** — press E on the lever to swing it open or shut.
 - **Three NPCs** who wander around and say a random one-liner each (with their
   own personality/lines) when you talk to them. One of them is lost.
+- **A snowman in the snowy hills** who'll grant you a snowball hat if you talk
+  to him — while you're wearing it, click to lob snowballs instead of your
+  hands staying empty. Talk to him again to take it off.
 - **A 120x120 fixed map** (hand-placed, identical every game) with a small
   town in the center — houses, a shop, a well, lampposts, signposts — and a
   distinct biome in each quadrant: a forest (NE), a farm with a barn and

@@ -26,6 +26,18 @@ var camera_pitch: float = 0.0
 var current_interactable: Node = null
 var carried_item_path: NodePath = NodePath("")
 
+## Snowball-throwing power, granted/revoked by talking to the snowman in the
+## snowy hills (see snowman.gd). Server-authoritative like everything else;
+## broadcast to every peer via the same per-player snapshot as position, so
+## the hat shows up for everyone, not just the wearer. A setter drives the
+## visual directly because _apply_snapshot is call_remote (never invoked on
+## the server itself), so the host's own hat has no other update path.
+var wearing_hat: bool = false:
+	set(value):
+		wearing_hat = value
+		if hat:
+			hat.visible = value
+
 # Input latched by the owning client, applied by the server.
 var _pending_move: Vector2 = Vector2.ZERO
 var _pending_sprint: bool = false
@@ -70,6 +82,7 @@ const NET_SNAP_DISTANCE := 4.0
 # Under the mesh so carried items swing around to stay in front of the
 # character as it turns to face its movement.
 @onready var hold_point: Marker3D = $Mesh/HoldPoint
+@onready var hat: Node3D = $Mesh/Hat
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
 @onready var options_button: Button = $HUD/OptionsButton
@@ -296,12 +309,17 @@ func _request_throw() -> void:
 		return
 	if _verified_sender_id() != peer_id:
 		return
-	if carried_item_path == NodePath(""):
+	if carried_item_path != NodePath(""):
+		var item := get_node_or_null(carried_item_path)
+		if item and item.has_method("throw_from"):
+			item.throw_from(self)
+		carried_item_path = NodePath("")
 		return
-	var item := get_node_or_null(carried_item_path)
-	if item and item.has_method("throw_from"):
-		item.throw_from(self)
-	carried_item_path = NodePath("")
+	# Nothing held: throw a snowball instead, if we've got the power for it.
+	if wearing_hat:
+		var world := get_tree().current_scene
+		if world and world.has_method("spawn_snowball"):
+			world.spawn_snowball(self)
 
 
 func _server_side_look_target() -> Node:
@@ -322,6 +340,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	_net_pos_target = state["pos"]
 	_net_rot_target = state["rot"]
 	_has_net_state = true
+	wearing_hat = state["hat"]
 
 
 func _smooth_to_net_state(delta: float) -> void:

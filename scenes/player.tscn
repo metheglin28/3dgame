@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/options_menu.gd" id="2"]
@@ -19,6 +19,19 @@ size = Vector3(0.15, 0.15, 0.3)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nose"]
 albedo_color = Color(0.1, 0.1, 0.1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_brim"]
+top_radius = 0.45
+bottom_radius = 0.45
+height = 0.06
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_top"]
+top_radius = 0.28
+bottom_radius = 0.32
+height = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hat"]
+albedo_color = Color(0.08, 0.08, 0.08, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_1"]
 font_size = 32
@@ -46,6 +59,19 @@ surface_material_override/0 = SubResource("StandardMaterial3D_nose")
 
 [node name="HoldPoint" type="Marker3D" parent="Mesh"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.9)
+
+[node name="Hat" type="Node3D" parent="Mesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+visible = false
+
+[node name="Brim" type="MeshInstance3D" parent="Mesh/Hat"]
+mesh = SubResource("CylinderMesh_brim")
+surface_material_override/0 = SubResource("StandardMaterial3D_hat")
+
+[node name="Top" type="MeshInstance3D" parent="Mesh/Hat"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.18, 0)
+mesh = SubResource("CylinderMesh_top")
+surface_material_override/0 = SubResource("StandardMaterial3D_hat")
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
