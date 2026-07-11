@@ -73,8 +73,11 @@ same ranges the sliders allow.
   skull-staked mouth. Inside it's one continuous line — entry tunnel, low
   goblin warren, snaking hall, campfire-lit main chamber tall enough for a
   troll, another snaking hall, then a small treasure room (chest and gold —
-  set dressing for now, not lootable). Enemy goblins and trolls are planned
-  to move in later; the rooms are sized for them.
+  set dressing for now, not lootable). The rooms are sized for their
+  tenants: **six goblins** now live along the line (plus a lookout outside)
+  — small, pointy-eared, in assorted greens from yellowish to dark moss.
+  They wander their own rooms and mouth off if you bother them. They're
+  harmless for now; combat mechanics come later. A troll is still planned.
 - **A 120x120 fixed map** (hand-placed, identical every game) with a small
   town in the center — houses, a shop, a well, lampposts, signposts — and a
   distinct biome in each quadrant: a forest (NE), a farm with a barn and

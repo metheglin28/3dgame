@@ -5,8 +5,6 @@ extends CharacterBody3D
 ## purely cosmetic: the server picks a random line and every peer is told to display
 ## it above the NPC's head at the same time.
 
-const WANDER_RADIUS := 6.0
-const SPEED := 2.0
 const PAUSE_TIME := 2.0
 const SPEECH_DURATION := 2.5
 
@@ -21,6 +19,10 @@ const DEFAULT_LINES: Array[String] = [
 
 @export var npc_name: String = "Some Guy"
 @export var lines: Array[String] = []
+# Exported (not consts) so cave dwellers like the goblins can be given a
+# leash short enough to keep them in their own room, and their own gait.
+@export var wander_radius := 6.0
+@export var speed := 2.0
 
 @onready var name_label: Label3D = $NameLabel
 @onready var speech_label: Label3D = $SpeechLabel
@@ -78,8 +80,8 @@ func _physics_process(delta: float) -> void:
 			_pick_new_target()
 	else:
 		var dir := to_target.normalized()
-		velocity.x = dir.x * SPEED
-		velocity.z = dir.z * SPEED
+		velocity.x = dir.x * speed
+		velocity.z = dir.z * speed
 		rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), 8.0 * delta)
 
 	move_and_slide()
@@ -87,7 +89,7 @@ func _physics_process(delta: float) -> void:
 
 func _pick_new_target() -> void:
 	var angle := randf() * TAU
-	var dist := randf() * WANDER_RADIUS
+	var dist := randf() * wander_radius
 	_target = _home + Vector3(cos(angle) * dist, 0, sin(angle) * dist)
 	_pause_timer = PAUSE_TIME
 
