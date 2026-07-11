@@ -10,6 +10,7 @@
 size = Vector2(120, 120)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+cull_mode = 2
 albedo_color = Color(0.45, 0.7, 0.4, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_wall"]
@@ -54,11 +55,6 @@ transform = Transform3D(0.8, -0.35, 0.48, 0, 0.8, 0.6, -0.6, -0.48, 0.64, 0, 8, 
 shadow_enabled = true
 
 [node name="Ground" type="Node3D" parent="."]
-# Collision is built procedurally by MapDecorations (see _build_ground_collision),
-# which needs to leave 4 circular gaps for the tunnel entrances -- a single
-# BoxShape3D can't have holes in it. The visual plane here has no collision of
-# its own; the ground you actually stand on is a matching set of generated
-# StaticBody3D tiles.
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
 mesh = SubResource("PlaneMesh_ground")

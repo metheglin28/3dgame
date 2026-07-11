@@ -175,7 +175,13 @@ func _add_ground_patch(center: Vector3, size: Vector2, color: Color) -> void:
 	var plane := PlaneMesh.new()
 	plane.size = size
 	mesh.mesh = plane
-	mesh.material_override = _make_material(color)
+	# Double-sided: now that the tunnels exist, a player standing underneath
+	# can genuinely look up at these, and a single-sided plane is invisible
+	# from below by default (that's the "clear floor" bug -- these planes
+	# were never reachable from underneath before there was an underneath).
+	var mat := _make_material(color)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh.material_override = mat
 	add_child(mesh)
 
 
@@ -594,16 +600,21 @@ func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
 	var biome_color: Color = {
 		"forest": FOREST_CANOPY, "farm": BARN_RED, "canyon": CANYON_ROCK, "snow": Color(0.5, 0.72, 0.85, 1),
 	}[biome]
-	# The hole itself: a plain dark disc so it reads as an opening rather than
-	# solid ground, plus an open collar ring standing proud of the surface
-	# (visible from both sides, so it doesn't vanish looking up from inside).
-	_add_cylinder(Vector3(pos.x, 0.03, pos.y), SHAFT_RADIUS, SHAFT_RADIUS, 0.06, Color(0.05, 0.05, 0.06), false)
+	# The hole itself: an open-ended tube reaching all the way down to Level A's
+	# floor, so looking in actually shows depth (and the spiral ramp inside)
+	# instead of a flat dark decal sitting on the grass. Plus a short
+	# biome-tinted collar standing proud of the surface for a bit of rim detail.
+	var shaft_top := 0.15
+	var shaft_height := shaft_top - LEVEL_A_Y
+	_add_ring(Vector3(pos.x, shaft_top - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK)
 	_add_ring(Vector3(pos.x, 0.3, pos.y), SHAFT_RADIUS + 0.25, 0.6, biome_color)
 	_add_sign(Vector3(pos.x + SHAFT_RADIUS + 1.5, 0, pos.y), "MIND THE GAP")
 
 
 func _build_connector_shaft(pos: Vector2) -> void:
 	_build_spiral_ramp(pos, LEVEL_B_Y, LEVEL_A_Y, SHAFT_RADIUS - 0.5)
+	var shaft_height := LEVEL_A_Y - LEVEL_B_Y
+	_add_ring(Vector3(pos.x, LEVEL_A_Y - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK)
 	_add_torch(Vector3(pos.x + 1.2, LEVEL_A_Y - 2.0, pos.y))
 	_add_torch(Vector3(pos.x - 1.2, LEVEL_B_Y + 2.5, pos.y))
 
