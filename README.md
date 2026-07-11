@@ -78,8 +78,9 @@ same ranges the sliders allow.
   to move things around.
 - **An underground tunnel network**, two levels deep, under the whole map.
   Each quadrant has a circular entrance you drop into (walk over the dark
-  disc and gravity does the rest) and climb back out of via a spiral ramp
-  (walk up, hop the last bit through the hole). Three vertical shafts connect
+  disc and gravity does the rest) and climb back out of via straight
+  switchback ramps — the top landing stops just short of the rim, one easy
+  jump from ground level in either direction. Three vertical shafts connect
   the upper and lower levels the same way. The maze layout is baked as a
   literal grid (no runtime randomness) generated once offline to guarantee
   every room has at least two connections — no dead ends, always another way

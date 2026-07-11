@@ -60,8 +60,8 @@ const MAZE_ORIGIN_Z := -12.0  # north edge of the maze (extends toward -z)
 ##
 ## Two levels under the whole map, one circular entrance shaft per quadrant
 ## (drop in from the surface), three vertical connector shafts between the
-## levels, and everywhere climbable via a spiral ramp -- no ladders, no dead
-## ends. Layout below was generated offline with a recursive-backtracker +
+## levels, and everywhere climbable via straight switchback ramps -- no
+## ladders, no dead ends. Layout below was generated offline with a recursive-backtracker +
 ## extra-edges pass (see the maze algorithm in scripts/map_decorations.gd's
 ## history) to GUARANTEE every room has at least two connections, then baked
 ## here as a literal grid: no randomness at runtime, identical every game.
@@ -233,6 +233,38 @@ func _add_sphere(pos: Vector3, radius: float, color: Color, collide: bool = true
 		body.add_child(col)
 
 
+## A snow mound: the VISUAL is a sphere sunk into the ground, but the COLLIDER
+## is a convex hull of only the above-ground dome (plus a short skirt below the
+## rim so the hull meets the ground with a wall, not a knife edge). A plain
+## sphere collider here would silently extend r*1.55 meters underground --
+## straight into the tunnel network, blocking corridors with invisible round
+## walls, and one mound reached right into the snow entrance shaft.
+func _add_mound(x: float, z: float, r: float) -> void:
+	var sink := r * 0.55
+	_add_sphere(Vector3(x, -sink, z), r, SNOW_WHITE, false)
+	var body := StaticBody3D.new()
+	body.position = Vector3(x, -sink, z)
+	body.collision_layer = 1
+	add_child(body)
+	var pts := PackedVector3Array()
+	var lat0 := asin(sink / r) # latitude (in body-local space) of the ground plane
+	var segs := 12
+	for ring in range(4):
+		var lat := lerpf(lat0, PI * 0.5, float(ring) / 4.0)
+		for k in range(segs):
+			var a := TAU * float(k) / segs
+			pts.append(Vector3(cos(a) * r * cos(lat), r * sin(lat), sin(a) * r * cos(lat)))
+	pts.append(Vector3(0, r, 0))
+	for k in range(segs):
+		var a := TAU * float(k) / segs
+		pts.append(Vector3(cos(a) * r * cos(lat0), sink - 0.3, sin(a) * r * cos(lat0)))
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = pts
+	var col := CollisionShape3D.new()
+	col.shape = shape
+	body.add_child(col)
+
+
 func _make_material(color: Color, emissive: bool = false) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
@@ -299,23 +331,29 @@ func _add_visual_slab(pos: Vector3, size: Vector3, color: Color) -> void:
 	add_child(mesh)
 
 
-## A box rotated around Y -- used for spiral-ramp treads, which need to sit
-## tangent to the shaft they wind around.
-func _add_rotated_box(pos: Vector3, size: Vector3, yaw: float, color: Color) -> void:
+## A straight walkable slope whose TOP surface runs exactly from `from` to
+## `to` (both points on the walking surface). Anchoring the top face rather
+## than the box center means ramp ends sit flush with whatever floor or
+## landing they meet -- even a ~0.1m ledge at a seam reads as a wall to the
+## capsule (steeper than the 45-degree floor limit) and would stop walkers dead.
+func _add_ramp(from: Vector3, to: Vector3, width: float, color: Color) -> void:
+	var thickness := 0.25
+	var x_axis := (to - from).normalized()
+	var z_axis := x_axis.cross(Vector3.UP).normalized()
+	var y_axis := z_axis.cross(x_axis).normalized()
 	var body := StaticBody3D.new()
-	body.position = pos
-	body.rotation.y = yaw
+	body.transform = Transform3D(Basis(x_axis, y_axis, z_axis), (from + to) * 0.5 - y_axis * (thickness * 0.5))
 	body.collision_layer = 1
 	add_child(body)
 	var mesh := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = size
+	box.size = Vector3(from.distance_to(to), thickness, width)
 	mesh.mesh = box
 	mesh.material_override = _make_material(color)
 	body.add_child(mesh)
 	var col := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	shape.size = size
+	shape.size = box.size
 	col.shape = shape
 	body.add_child(col)
 
@@ -521,7 +559,7 @@ func _build_snowy_hills() -> void:
 		[-52, -52, 4.5], [-24, -54, 5.0],
 	]
 	for m in mounds:
-		_add_sphere(Vector3(m[0], -m[2] * 0.55, m[1]), m[2], SNOW_WHITE)
+		_add_mound(m[0], m[1], m[2])
 
 	var pines := [
 		[-16, -30], [-26, -26], [-40, -28], [-50, -18], [-55, -44],
@@ -604,12 +642,12 @@ func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_h
 
 
 func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
-	_build_spiral_ramp(pos, LEVEL_A_Y, -0.15, SHAFT_RADIUS - 0.5)
+	_build_switchback_ramp(pos, LEVEL_A_Y, 0.0)
 	var biome_color: Color = {
 		"forest": FOREST_CANOPY, "farm": BARN_RED, "canyon": CANYON_ROCK, "snow": Color(0.5, 0.72, 0.85, 1),
 	}[biome]
 	# The hole itself: an open-ended tube reaching all the way down to Level A's
-	# floor, so looking in actually shows depth (and the spiral ramp inside)
+	# floor, so looking in actually shows depth (and the ramps inside)
 	# instead of a flat dark decal sitting on the grass. Plus a short
 	# biome-tinted collar standing proud of the surface for a bit of rim detail.
 	var shaft_top := 0.15
@@ -620,28 +658,51 @@ func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
 
 
 func _build_connector_shaft(pos: Vector2) -> void:
-	_build_spiral_ramp(pos, LEVEL_B_Y, LEVEL_A_Y, SHAFT_RADIUS - 0.5)
+	_build_switchback_ramp(pos, LEVEL_B_Y, LEVEL_A_Y)
 	var shaft_height := LEVEL_A_Y - LEVEL_B_Y
 	_add_ring(Vector3(pos.x, LEVEL_A_Y - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK)
 	_add_torch(Vector3(pos.x + 1.2, LEVEL_A_Y - 2.0, pos.y))
 	_add_torch(Vector3(pos.x - 1.2, LEVEL_B_Y + 2.5, pos.y))
 
 
-## Winds a walkable staircase of overlapping treads around the inside wall of
-## a vertical shaft from y_bottom to y_top, so "drop down into" (just fall)
-## and "jump out of" (walk the ramp up, hop the last bit) both work with
-## nothing but ordinary gravity and jump height -- no ladders, no teleports.
-func _build_spiral_ramp(center: Vector2, y_bottom: float, y_top: float, radius: float) -> void:
-	var rise := y_top - y_bottom
-	var turns := maxf(1.0, rise / 4.0)
-	var steps_per_turn := 14
-	var steps := int(turns * steps_per_turn)
-	for i in range(steps + 1):
-		var t := float(i) / float(steps)
-		var angle := t * turns * TAU
-		var y := y_bottom + t * rise
-		var tread_pos := Vector3(center.x + cos(angle) * radius, y, center.y + sin(angle) * radius)
-		_add_rotated_box(tread_pos, Vector3(1.8, 0.25, 1.0), angle + PI * 0.5, STONE_GRAY)
+## Straight switchback ramps up the inside of a vertical shaft: alternating
+## slopes with a flat landing at each turn, like a fire escape. The top
+## landing deliberately stops TOP_LANDING_DROP short of y_top (the level
+## you're climbing out onto), which is within normal jump height -- so "jump
+## out of" the hole is literally one jump from the last landing, and hopping
+## in lands you gently on that same landing. Everything below still works by
+## just falling.
+const RAMP_RUN := 2.2          # horizontal length of one slope (fits the shaft)
+const RAMP_WIDTH := 1.2
+# Lane separation matters more than lane width: consecutive slopes CONVERGE in
+# height toward the landing they share, so a slope is always passing directly
+# overhead of the previous one at less than head height near that end. The
+# lanes therefore need a gap wider than the player capsule (0.8) between their
+# edges, or climbers bonk into the underside of the next slope up.
+const RAMP_LANE_OFFSET := 1.1  # lane edges: 0.5..1.7 either side -> 1.0 gap
+const LANDING_LEN := 1.1
+const TOP_LANDING_DROP := 0.9  # rim height above the top landing; jump apex is ~1.17
+const MAX_SEGMENT_RISE := 1.6  # keeps every slope comfortably under 45 degrees
+
+func _build_switchback_ramp(center: Vector2, y_bottom: float, y_top: float) -> void:
+	var total_rise := (y_top - TOP_LANDING_DROP) - y_bottom
+	var segments := int(ceilf(total_rise / MAX_SEGMENT_RISE))
+	var rise := total_rise / segments
+	var end_x := RAMP_RUN * 0.5 + LANDING_LEN * 0.5
+	for i in range(segments):
+		var y0 := y_bottom + i * rise
+		# Even segments climb toward +x in the -z lane, odd ones back toward -x
+		# in the +z lane, so consecutive slopes sit side by side instead of
+		# stacked (headroom between same-lane slopes is two full rises).
+		var dir := 1.0 if i % 2 == 0 else -1.0
+		var lane_z := center.y + (-RAMP_LANE_OFFSET if i % 2 == 0 else RAMP_LANE_OFFSET)
+		_add_ramp(
+			Vector3(center.x - dir * RAMP_RUN * 0.5, y0, lane_z),
+			Vector3(center.x + dir * RAMP_RUN * 0.5, y0 + rise, lane_z),
+			RAMP_WIDTH, STONE_GRAY)
+		# Landing at this slope's top end, spanning both lanes so turning
+		# around is just walking across it.
+		_add_box(Vector3(center.x + dir * end_x, y0 + rise - 0.125, center.y), Vector3(LANDING_LEN, 0.25, (RAMP_LANE_OFFSET + RAMP_WIDTH * 0.5) * 2.0), STONE_GRAY)
 
 
 func _add_ring(pos: Vector3, radius: float, height: float, color: Color) -> void:
