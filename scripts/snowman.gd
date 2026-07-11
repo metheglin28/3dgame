@@ -9,6 +9,10 @@ func on_interact(by: Node3D) -> void:
 	if not multiplayer.is_server():
 		return
 	by.wearing_hat = not by.wearing_hat
+	if by.wearing_hat:
+		# Powers are mutually exclusive with the sword (see sword_stone.gd),
+		# so a click always unambiguously means one thing.
+		by.wearing_helmet = false
 
 
 func get_interact_prompt() -> String:

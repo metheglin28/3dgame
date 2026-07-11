@@ -18,6 +18,7 @@ extends Node3D
 ##            south (-z)
 
 const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
+const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
 
 const MAP_HALF := 60.0
 
@@ -455,6 +456,12 @@ func _build_forest() -> void:
 	_add_rock(52, 48, 0.6)
 	# A stump in a small clearing, for sitting on and contemplating life.
 	_add_cylinder(Vector3(33, 0.3, 30), 0.5, 0.55, 0.6, TRUNK_BROWN)
+
+	# The sword in the stone, in the same clearing -- grants the sword-swinging
+	# power (see sword_stone.gd).
+	var sword_stone := SWORD_STONE_SCENE.instantiate()
+	sword_stone.position = Vector3(30, 0, 29)
+	add_child(sword_stone)
 
 
 # --- NW: farm --------------------------------------------------------------------

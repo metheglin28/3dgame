@@ -37,7 +37,7 @@ boxes) on purpose — the point is the interaction, not the art.
 | Zoom camera in/out | Mouse wheel |
 | Jump | Space |
 | Interact / talk / pick up | E |
-| Throw held item / snowball | Left mouse click |
+| Throw held item / snowball, or swing sword | Left mouse click |
 | Free the mouse cursor | Esc |
 | Leave to main menu | HUD button, top-right (after pressing Esc) |
 | Options (sensitivity, jump, camera...) | HUD button, top-right (after pressing Esc) |
@@ -65,6 +65,10 @@ same ranges the sliders allow.
 - **A snowman in the snowy hills** who'll grant you a snowball hat if you talk
   to him — while you're wearing it, click to lob snowballs instead of your
   hands staying empty. Talk to him again to take it off.
+- **A sword in a stone** in the forest clearing — pull it to don a knight
+  helmet and a sword; while you have it, click to swing, which knocks nearby
+  props (and snowballs) flying. Interact again to put it back. You can hold
+  the sword *or* the snowball hat, not both — each one replaces the other.
 - **A 120x120 fixed map** (hand-placed, identical every game) with a small
   town in the center — houses, a shop, a well, lampposts, signposts — and a
   distinct biome in each quadrant: a forest (NE), a farm with a barn and

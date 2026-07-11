@@ -38,6 +38,25 @@ var wearing_hat: bool = false:
 		if hat:
 			hat.visible = value
 
+## Sword-swinging power, granted/revoked by pulling the sword from the stone
+## in the forest (see sword_stone.gd). Same setter-drives-the-visual pattern
+## as wearing_hat, and same snapshot-based sync. The two powers are mutually
+## exclusive (each granter clears the other) so a click always unambiguously
+## means one thing: throw held item > snowball > sword swing.
+var wearing_helmet: bool = false:
+	set(value):
+		wearing_helmet = value
+		if helmet:
+			helmet.visible = value
+		if sword:
+			sword.visible = value
+
+# Server-side swing rate limit; also drives the swing animation duration.
+var _swing_cooldown: float = 0.0
+const SWING_COOLDOWN := 0.5
+const SWING_RANGE := 2.6
+const SWING_PUSH := 10.0
+
 # Input latched by the owning client, applied by the server.
 var _pending_move: Vector2 = Vector2.ZERO
 var _pending_sprint: bool = false
@@ -83,6 +102,10 @@ const NET_SNAP_DISTANCE := 4.0
 # character as it turns to face its movement.
 @onready var hold_point: Marker3D = $Mesh/HoldPoint
 @onready var hat: Node3D = $Mesh/Hat
+@onready var helmet: Node3D = $Mesh/Helmet
+# SwordPivot sits at the shoulder and the sword hangs off it, so tweening the
+# pivot's rotation swings the blade through an arc instead of spinning it in place.
+@onready var sword: Node3D = $Mesh/SwordPivot
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
 @onready var options_button: Button = $HUD/OptionsButton
@@ -228,6 +251,7 @@ func _physics_process(delta: float) -> void:
 	# Server-side simulation for this player, driven by the last input it sent us.
 	_coyote_timer = COYOTE_TIME if is_on_floor() else maxf(_coyote_timer - delta, 0.0)
 	_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
+	_swing_cooldown = maxf(_swing_cooldown - delta, 0.0)
 
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
@@ -315,11 +339,49 @@ func _request_throw() -> void:
 			item.throw_from(self)
 		carried_item_path = NodePath("")
 		return
-	# Nothing held: throw a snowball instead, if we've got the power for it.
+	# Nothing held: throw a snowball or swing the sword, whichever power we
+	# have (the granters keep them mutually exclusive, see sword_stone.gd).
 	if wearing_hat:
 		var world := get_tree().current_scene
 		if world and world.has_method("spawn_snowball"):
 			world.spawn_snowball(self)
+	elif wearing_helmet and _swing_cooldown <= 0.0:
+		_swing_cooldown = SWING_COOLDOWN
+		_do_swing_effects()
+		_play_swing.rpc()
+
+
+## Server-only: the gameplay half of a swing. Shoves any physics prop (items,
+## snowballs) in front of us; the visual half is _play_swing on every peer.
+func _do_swing_effects() -> void:
+	var forward := mesh.global_transform.basis * Vector3.FORWARD
+	var targets: Array[Node] = []
+	targets.append_array(get_tree().get_nodes_in_group("sync_items"))
+	targets.append_array(get_tree().get_nodes_in_group("sync_projectiles"))
+	for t in targets:
+		if not t is RigidBody3D:
+			continue
+		var to_target: Vector3 = t.global_position - global_position
+		if to_target.length() > SWING_RANGE:
+			continue
+		# Only things roughly in the half-space we're facing get hit.
+		if forward.dot(to_target.normalized()) < 0.3:
+			continue
+		if "carried_by" in t and t.carried_by != -1:
+			continue
+		t.freeze = false
+		var push_dir := (to_target * Vector3(1, 0, 1)).normalized()
+		t.apply_central_impulse((push_dir + Vector3.UP * 0.6).normalized() * SWING_PUSH * t.mass)
+
+
+## Cosmetic swing arc, played identically on every peer (reliable broadcast,
+## same pattern as the door toggle -- rare events don't go in the snapshot).
+@rpc("authority", "call_local", "reliable")
+func _play_swing() -> void:
+	var tween := create_tween()
+	sword.rotation = Vector3(0, 0, 0)
+	tween.tween_property(sword, "rotation:x", -2.0, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(sword, "rotation:x", 0.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
 
 func _server_side_look_target() -> Node:
@@ -341,6 +403,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	_net_rot_target = state["rot"]
 	_has_net_state = true
 	wearing_hat = state["hat"]
+	wearing_helmet = state["helmet"]
 
 
 func _smooth_to_net_state(delta: float) -> void:
