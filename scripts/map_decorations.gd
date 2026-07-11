@@ -143,6 +143,7 @@ func _ready() -> void:
 	_build_quadrant_ground()
 	_build_town()
 	_build_forest()
+	_build_cave()
 	_build_farm()
 	_build_canyon_maze()
 	_build_snowy_hills()
@@ -475,6 +476,8 @@ func _add_house(pos: Vector3, wall_color: Color) -> void:
 
 func _build_forest() -> void:
 	# Hand-scattered: staggered so nothing lines up into obvious rows.
+	# The NE corner (x>39, z>43-ish) is deliberately left clear of trees --
+	# the goblin cave's knoll sits there (see _build_cave).
 	var trees := [
 		[16, 18, 2.4, 1.3], [21, 15, 2.8, 1.5], [27, 19, 2.2, 1.2], [33, 15, 3.0, 1.6],
 		[40, 17, 2.5, 1.3], [47, 14, 2.7, 1.4], [53, 18, 2.3, 1.2],
@@ -483,15 +486,15 @@ func _build_forest() -> void:
 		[18, 35, 2.3, 1.3], [26, 33, 2.8, 1.5], [34, 36, 2.4, 1.2], [42, 33, 2.6, 1.4],
 		[50, 35, 2.9, 1.5], [56, 30, 2.2, 1.2],
 		[15, 44, 2.7, 1.4], [23, 42, 2.3, 1.2], [31, 45, 3.0, 1.6], [39, 43, 2.5, 1.3],
-		[47, 45, 2.4, 1.3], [54, 42, 2.8, 1.5],
-		[19, 52, 2.5, 1.3], [28, 54, 2.2, 1.2], [37, 51, 2.7, 1.4], [45, 53, 2.4, 1.3],
-		[53, 55, 2.6, 1.4],
+		[43.5, 43, 2.4, 1.3], [54, 42, 2.8, 1.5],
+		[19, 52, 2.5, 1.3], [28, 54, 2.2, 1.2], [37, 51, 2.7, 1.4], [41, 46, 2.4, 1.3],
+		[57, 46, 2.6, 1.4],
 	]
 	for t in trees:
 		_add_tree(t[0], t[1], t[2], t[3])
 	_add_rock(25, 29, 0.7)
 	_add_rock(43, 38, 0.9)
-	_add_rock(52, 48, 0.6)
+	_add_rock(53, 42.5, 0.6)
 	# A stump in a small clearing, for sitting on and contemplating life.
 	_add_cylinder(Vector3(33, 0.3, 30), 0.5, 0.55, 0.6, TRUNK_BROWN)
 
@@ -500,6 +503,163 @@ func _build_forest() -> void:
 	var sword_stone := SWORD_STONE_SCENE.instantiate()
 	sword_stone.position = Vector3(30, 0, 29)
 	add_child(sword_stone)
+
+
+# --- NE: the goblin cave -----------------------------------------------------------
+
+## An above-ground cave dug into a rocky knoll in the forest's NE corner --
+## the future home of the goblins and trolls, so it's sized for both: the
+## entry tunnel and the side warren are goblin-scale (low ceilings, cramped),
+## while the main chamber has 5.5m of headroom so a troll can stand up and
+## swing something. A narrow gap in the east wall leads to a small treasure
+## room. Skull decor and a campfire included, as any respectable goblin den
+## requires. Rough interior map (entrance at the bottom, facing the town):
+##
+##      +--------+----------------+------+
+##      | warren |  main chamber  | loot |
+##      | (low)  |   (fire) (tall)| room |
+##      +--------+---+       +----+------+
+##                   | entry |
+##                   +-------+
+const CAVE_ROCK := Color(0.34, 0.3, 0.27, 1)
+const CAVE_FLOOR := Color(0.28, 0.25, 0.22, 1)
+const BONE_WHITE := Color(0.92, 0.9, 0.82, 1)
+const GOLD := Color(0.95, 0.78, 0.2, 1)
+const CHEST_BROWN := Color(0.45, 0.28, 0.12, 1)
+
+func _build_cave() -> void:
+	# Stone floor patches so the inside reads as rock, not grass (the actual
+	# walking surface is still the regular ground collision).
+	_add_ground_patch(Vector3(49, 0.03, 52), Vector2(11, 9), CAVE_FLOOR)      # main chamber
+	_add_ground_patch(Vector3(49, 0.03, 45.8), Vector2(4, 4.5), CAVE_FLOOR)   # entry tunnel
+	_add_ground_patch(Vector3(41.5, 0.03, 52), Vector2(5, 5), CAVE_FLOOR)     # goblin warren
+	_add_ground_patch(Vector3(56.8, 0.03, 54), Vector2(4.5, 4.5), CAVE_FLOOR) # treasure room
+
+	# Entry tunnel: 3 wide x 3.5 high, mouth facing south toward the town.
+	_add_box(Vector3(47, 1.75, 46), Vector3(1, 3.5, 4), CAVE_ROCK)  # west cheek
+	_add_box(Vector3(51, 1.75, 46), Vector3(1, 3.5, 4), CAVE_ROCK)  # east cheek
+	_add_box(Vector3(49, 3.75, 46), Vector3(5, 0.5, 4), CAVE_ROCK)  # tunnel roof
+	# A heavy rock brow over the mouth plus two flanking boulders, so from
+	# outside it reads as a proper cave entrance and not a doorway.
+	_add_box(Vector3(49, 4.9, 45.5), Vector3(7, 2.4, 3), CAVE_ROCK)
+	_add_sphere(Vector3(45.7, 0.9, 44.3), 1.3, CAVE_ROCK)
+	_add_sphere(Vector3(52.3, 0.9, 44.3), 1.3, CAVE_ROCK)
+
+	# Main chamber: interior x 44..54, z 48..56, ceiling 5.5 (troll headroom).
+	# South wall, split around the tunnel opening, with a header above it.
+	_add_box(Vector3(45.25, 2.75, 47.5), Vector3(4.5, 5.5, 1), CAVE_ROCK)
+	_add_box(Vector3(52.75, 2.75, 47.5), Vector3(4.5, 5.5, 1), CAVE_ROCK)
+	_add_box(Vector3(49, 4.5, 47.5), Vector3(3, 2, 1), CAVE_ROCK)
+	# West wall, split around the warren doorway (2.4 high -- goblin-sized,
+	# though players and trolls can duck... fine, players fit, trolls won't).
+	_add_box(Vector3(43.5, 2.75, 48.5), Vector3(1, 5.5, 3), CAVE_ROCK)
+	_add_box(Vector3(43.5, 2.75, 55), Vector3(1, 5.5, 4), CAVE_ROCK)
+	_add_box(Vector3(43.5, 3.95, 51.5), Vector3(1, 3.1, 3), CAVE_ROCK)
+	# East wall, split around the treasure-room gap.
+	_add_box(Vector3(54.5, 2.75, 49.75), Vector3(1, 5.5, 5.5), CAVE_ROCK)
+	_add_box(Vector3(54.5, 2.75, 55.75), Vector3(1, 5.5, 2.5), CAVE_ROCK)
+	_add_box(Vector3(54.5, 3.95, 53.5), Vector3(1, 3.1, 2), CAVE_ROCK)
+	# North wall spans the warren, chamber, and treasure room in one run.
+	_add_box(Vector3(49.25, 2.75, 56.5), Vector3(20.5, 5.5, 1), CAVE_ROCK)
+
+	# Goblin warren: low 3.5x4 side room off the chamber's west wall.
+	_add_box(Vector3(39.5, 1.3, 52), Vector3(1, 2.6, 6), CAVE_ROCK)
+	_add_box(Vector3(41, 1.3, 49.5), Vector3(4, 2.6, 1), CAVE_ROCK)
+	_add_box(Vector3(41, 1.3, 54.5), Vector3(4, 2.6, 1), CAVE_ROCK)
+	_add_box(Vector3(41.5, 2.85, 52), Vector3(6, 0.5, 6), CAVE_ROCK)
+
+	# Treasure room: small 3.5x4 room behind the east gap.
+	_add_box(Vector3(59, 1.6, 54), Vector3(1, 3.2, 6), CAVE_ROCK)
+	_add_box(Vector3(57, 1.6, 51.5), Vector3(5, 3.2, 1), CAVE_ROCK)
+	_add_box(Vector3(57, 3.45, 54.25), Vector3(5, 0.5, 6.5), CAVE_ROCK)
+
+	# Chamber roof plus stepped rock on top, so from outside the whole thing
+	# reads as a knoll (and each step is under jump height, so climbing the
+	# outside of the cave is possible, because of course players will try).
+	_add_box(Vector3(49, 5.75, 52), Vector3(12, 0.5, 10), CAVE_ROCK)
+	_add_box(Vector3(49, 6.6, 52), Vector3(9, 1.0, 7.5), CAVE_ROCK)
+	_add_box(Vector3(49, 7.5, 52.5), Vector3(6, 0.8, 5), CAVE_ROCK)
+
+	# --- decor ---
+	_add_campfire(49, 52)
+	# Trophy skull pile in the chamber's NW corner...
+	_add_skull(Vector3(44.9, 0.2, 55.2), 0.6)
+	_add_skull(Vector3(45.5, 0.2, 55.5), -0.9)
+	_add_skull(Vector3(45.1, 0.2, 54.6), 2.2)
+	_add_skull(Vector3(45.1, 0.55, 55.1), 1.5)
+	# ...a couple scattered around the fire...
+	_add_skull(Vector3(47.6, 0.2, 50.9), 2.8)
+	_add_skull(Vector3(50.8, 0.2, 53.4), -2.0)
+	# ...one in the warren, one guarding the loot.
+	_add_skull(Vector3(41.0, 0.2, 53.2), 1.1)
+	_add_skull(Vector3(56.0, 0.2, 52.6), -0.4)
+	# Skulls on stakes flanking the entrance, facing arrivals.
+	for sx: float in [45.6, 52.4]:
+		_add_cylinder(Vector3(sx, 0.8, 45.9), 0.06, 0.08, 1.6, TRUNK_BROWN, false)
+		_add_skull(Vector3(sx, 1.8, 45.9), 0.0)
+	_add_sign(Vector3(54.5, 0, 44.5), "BEWARE: GOBLINS")
+
+	# Torches so the warren and loot room aren't pitch black.
+	_add_torch(Vector3(41.5, 1.9, 50.6))
+	_add_torch(Vector3(56.5, 2.4, 55.4))
+
+	# The treasure: a chest and a spill of gold. Not lootable (yet) -- it's
+	# set dressing for the goblins to guard once they move in.
+	_add_box(Vector3(57.6, 0.35, 54.8), Vector3(1.0, 0.7, 0.7), CHEST_BROWN)
+	_add_box(Vector3(57.6, 0.78, 54.8), Vector3(1.06, 0.16, 0.76), Color(0.3, 0.18, 0.08, 1), false)
+	_add_sphere(Vector3(57.6, 0.95, 54.8), 0.12, GOLD, false)
+	_add_cylinder(Vector3(56.2, 0.06, 53.2), 0.6, 0.6, 0.12, GOLD, false)
+	_add_cylinder(Vector3(56.5, 0.18, 53.5), 0.4, 0.4, 0.12, GOLD, false)
+	_add_cylinder(Vector3(55.9, 0.28, 53.0), 0.25, 0.25, 0.12, GOLD, false)
+	_add_box(Vector3(57.2, 0.15, 52.6), Vector3(0.5, 0.3, 0.3), GOLD, false)
+	_add_box(Vector3(55.6, 0.1, 54.4), Vector3(0.4, 0.2, 0.25), GOLD, false)
+
+
+## A skull: sphere cranium, box jaw, two dark eye sockets. Faces -z at yaw 0.
+## Purely decorative, no collision.
+func _add_skull(pos: Vector3, yaw: float = 0.0) -> void:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	add_child(root)
+	var cranium := MeshInstance3D.new()
+	var s := SphereMesh.new()
+	s.radius = 0.2
+	s.height = 0.4
+	cranium.mesh = s
+	cranium.material_override = _make_material(BONE_WHITE)
+	root.add_child(cranium)
+	var jaw := MeshInstance3D.new()
+	var jb := BoxMesh.new()
+	jb.size = Vector3(0.22, 0.12, 0.18)
+	jaw.mesh = jb
+	jaw.position = Vector3(0, -0.14, -0.06)
+	jaw.material_override = _make_material(BONE_WHITE)
+	root.add_child(jaw)
+	for ex: float in [-0.07, 0.07]:
+		var eye := MeshInstance3D.new()
+		var eb := BoxMesh.new()
+		eb.size = Vector3(0.06, 0.07, 0.04)
+		eye.mesh = eb
+		eye.position = Vector3(ex, 0.02, -0.185)
+		eye.material_override = _make_material(Color(0.05, 0.05, 0.05, 1))
+		root.add_child(eye)
+
+
+## Ring of stones, crossed logs, an emissive flame cone, and a warm light.
+func _add_campfire(x: float, z: float) -> void:
+	for k in range(7):
+		var a := TAU * float(k) / 7.0
+		_add_sphere(Vector3(x + cos(a) * 0.8, 0.14, z + sin(a) * 0.8), 0.2, STONE_GRAY, false)
+	_add_box(Vector3(x, 0.12, z), Vector3(1.1, 0.15, 0.15), Color(0.2, 0.12, 0.08, 1), false)
+	_add_box(Vector3(x, 0.12, z), Vector3(0.15, 0.15, 1.1), Color(0.2, 0.12, 0.08, 1), false)
+	_add_cylinder(Vector3(x, 0.5, z), 0.03, 0.38, 0.85, Color(1, 0.55, 0.15, 1), false, true)
+	var light := OmniLight3D.new()
+	light.position = Vector3(x, 1.3, z)
+	light.light_color = TORCH_COLOR
+	light.light_energy = 1.8
+	light.omni_range = 11.0
+	add_child(light)
 
 
 # --- NW: farm --------------------------------------------------------------------
