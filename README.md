@@ -70,10 +70,11 @@ same ranges the sliders allow.
   props (and snowballs) flying. Interact again to put it back. You can hold
   the sword *or* the snowball hat, not both — each one replaces the other.
 - **A goblin cave** in the forest's NE corner: a rocky knoll with a
-  skull-staked mouth, a campfire-lit main chamber tall enough for a troll, a
-  low goblin warren off one side, and a small treasure room (chest and gold —
-  set dressing for now, not lootable) behind a narrow gap. Enemy goblins and
-  trolls are planned to move in later; the rooms are sized for them.
+  skull-staked mouth. Inside it's one continuous line — entry tunnel, low
+  goblin warren, snaking hall, campfire-lit main chamber tall enough for a
+  troll, another snaking hall, then a small treasure room (chest and gold —
+  set dressing for now, not lootable). Enemy goblins and trolls are planned
+  to move in later; the rooms are sized for them.
 - **A 120x120 fixed map** (hand-placed, identical every game) with a small
   town in the center — houses, a shop, a well, lampposts, signposts — and a
   distinct biome in each quadrant: a forest (NE), a farm with a barn and
