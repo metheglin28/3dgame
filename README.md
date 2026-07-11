@@ -69,6 +69,14 @@ same ranges the sliders allow.
   and snowy hills with a snowman (SW). All layout lives in
   `scripts/map_decorations.gd` as literal coordinates — tweak numbers there
   to move things around.
+- **An underground tunnel network**, two levels deep, under the whole map.
+  Each quadrant has a circular entrance you drop into (walk over the dark
+  disc and gravity does the rest) and climb back out of via a spiral ramp
+  (walk up, hop the last bit through the hole). Three vertical shafts connect
+  the upper and lower levels the same way. The maze layout is baked as a
+  literal grid (no runtime randomness) generated once offline to guarantee
+  every room has at least two connections — no dead ends, always another way
+  through — and lit with scattered torches so it's never pitch black.
 
 ## Project layout
 

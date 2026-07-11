@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/door.tscn" id="2"]
@@ -11,9 +11,6 @@ size = Vector2(120, 120)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
 albedo_color = Color(0.45, 0.7, 0.4, 1)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
-size = Vector3(120, 1, 120)
 
 [sub_resource type="BoxMesh" id="BoxMesh_wall"]
 size = Vector3(8, 3, 0.3)
@@ -56,16 +53,16 @@ environment = SubResource("Environment_1")
 transform = Transform3D(0.8, -0.35, 0.48, 0, 0.8, 0.6, -0.6, -0.48, 0.64, 0, 8, 0)
 shadow_enabled = true
 
-[node name="Ground" type="StaticBody3D" parent="."]
-collision_layer = 1
+[node name="Ground" type="Node3D" parent="."]
+# Collision is built procedurally by MapDecorations (see _build_ground_collision),
+# which needs to leave 4 circular gaps for the tunnel entrances -- a single
+# BoxShape3D can't have holes in it. The visual plane here has no collision of
+# its own; the ground you actually stand on is a matching set of generated
+# StaticBody3D tiles.
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
 mesh = SubResource("PlaneMesh_ground")
 surface_material_override/0 = SubResource("StandardMaterial3D_ground")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-shape = SubResource("BoxShape3D_ground")
 
 [node name="WallLeft" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 1.5, 0)

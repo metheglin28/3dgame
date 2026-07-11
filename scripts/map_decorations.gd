@@ -53,6 +53,87 @@ const MAZE_WALL_HEIGHT := 6.0
 const MAZE_ORIGIN_X := 12.0   # west edge of the maze
 const MAZE_ORIGIN_Z := -12.0  # north edge of the maze (extends toward -z)
 
+## --- underground tunnel network ------------------------------------------
+##
+## Two levels under the whole map, one circular entrance shaft per quadrant
+## (drop in from the surface), three vertical connector shafts between the
+## levels, and everywhere climbable via a spiral ramp -- no ladders, no dead
+## ends. Layout below was generated offline with a recursive-backtracker +
+## extra-edges pass (see the maze algorithm in scripts/map_decorations.gd's
+## history) to GUARANTEE every room has at least two connections, then baked
+## here as a literal grid: no randomness at runtime, identical every game.
+## '#' = solid rock pillar, '.' = open floor. Odd-indexed rows/columns are the
+## connectors between the "room" cells at even indices (standard doubled-grid
+## maze representation), so both wide rooms and narrow passages show up
+## naturally in the same grid.
+const TUNNEL_CELL := 5.0
+const LEVEL_A_Y := -6.0
+const LEVEL_B_Y := -15.0
+const TUNNEL_WALL_HEIGHT := 4.0
+const TUNNEL_ROCK := Color(0.3, 0.28, 0.27, 1)
+const TUNNEL_FLOOR_COLOR := Color(0.24, 0.22, 0.21, 1)
+const TUNNEL_CEILING_COLOR := Color(0.18, 0.17, 0.16, 1)
+const SHAFT_RADIUS := 2.2
+const TORCH_COLOR := Color(1.0, 0.65, 0.3, 1)
+
+const LEVEL_A_ORIGIN := Vector2(-57.5, -57.5)
+const LEVEL_A_ROWS: Array[String] = [
+	"#.#.#####.###.#.#.#.#.#",
+	"#.....................#",
+	"###.#.#.#.#.#.#.#.#.#.#",
+	"#.............#.#.#...#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#...........#.........#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#...........#...#...#.#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#...........#...#.....#",
+	"#.###.#.#.#.#.#.#.#.#.#",
+	"#.......#.............#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#.....#...............#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#...........#.........#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#...#.............#...#",
+	"#.#.#.#.#.#.#.#.#.#.#.#",
+	"#.............#.#.....#",
+	"#.###.#.#####.#.#.#.#.#",
+	"#...............#.....#",
+	"#.#.#.#.#.#.#.#.#.###.#",
+]
+
+const LEVEL_B_ORIGIN := Vector2(-37.5, -37.5)
+const LEVEL_B_ROWS: Array[String] = [
+	"#.#.#.#.#.#.#.#",
+	"#.............#",
+	"#.#.#.#.###.#.#",
+	"#...#...#...#.#",
+	"#.#.#.#.#.#.#.#",
+	"#...#.........#",
+	"#.#.#.#.#.#.#.#",
+	"#...#.........#",
+	"###.#.#.#.#.#.#",
+	"#.........#...#",
+	"#.#.#.#.#.#.#.#",
+	"#.....#...#.#.#",
+	"#########.#.#.#",
+	"#...#.........#",
+	"#.#.#.#.#.#.#.#",
+]
+
+## World-space (x, z) of each entrance/connector, snapped exactly onto a
+## Level A room center so the shaft drops into open floor, not a pillar.
+const ENTRANCE_SHAFTS := {
+	"forest": Vector2(30, 40),
+	"farm": Vector2(-30, 40),
+	"canyon": Vector2(20, -20),
+	"snow": Vector2(-30, -30),
+}
+## Vertical shafts linking Level A down to Level B. Each is also a valid room
+## center in both grids (checked when the layout was authored).
+const CONNECTOR_SHAFTS: Array[Vector2] = [Vector2(0, 0), Vector2(-20, -20), Vector2(20, 20)]
+
 
 func _ready() -> void:
 	_build_perimeter_walls()
@@ -62,6 +143,8 @@ func _ready() -> void:
 	_build_farm()
 	_build_canyon_maze()
 	_build_snowy_hills()
+	_build_ground_collision()
+	_build_tunnels()
 
 
 # --- primitive helpers --------------------------------------------------------
@@ -177,6 +260,104 @@ func _add_sign(pos: Vector3, text: String) -> void:
 	label.font_size = 40
 	label.outline_size = 8
 	add_child(label)
+
+
+## Collision-only slab (no mesh) -- used for the ground tiles, since the
+## visual plane already exists separately in world.tscn.
+func _add_collision_box(pos: Vector3, size: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.position = pos
+	body.collision_layer = 1
+	add_child(body)
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	col.shape = shape
+	body.add_child(col)
+
+
+## Visual-only slab (no collision) -- used for tunnel ceilings, rendered from
+## both sides since the player is always underneath looking up at it.
+func _add_visual_slab(pos: Vector3, size: Vector3, color: Color) -> void:
+	var mesh := MeshInstance3D.new()
+	mesh.position = pos
+	var box := BoxMesh.new()
+	box.size = size
+	mesh.mesh = box
+	var mat := _make_material(color)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh.material_override = mat
+	add_child(mesh)
+
+
+## A box rotated around Y -- used for spiral-ramp treads, which need to sit
+## tangent to the shaft they wind around.
+func _add_rotated_box(pos: Vector3, size: Vector3, yaw: float, color: Color) -> void:
+	var body := StaticBody3D.new()
+	body.position = pos
+	body.rotation.y = yaw
+	body.collision_layer = 1
+	add_child(body)
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = size
+	mesh.mesh = box
+	mesh.material_override = _make_material(color)
+	body.add_child(mesh)
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	col.shape = shape
+	body.add_child(col)
+
+
+func _add_torch(pos: Vector3) -> void:
+	_add_sphere(pos, 0.12, TORCH_COLOR, false)
+	var light := OmniLight3D.new()
+	light.position = pos
+	light.light_color = TORCH_COLOR
+	light.light_energy = 1.3
+	light.omni_range = 7.0
+	add_child(light)
+
+
+## Splits a list of Rect2 (XZ footprint) so that a square hole of the given
+## half-size is cut out around `hole_center` -- used to punch the tunnel
+## entrance/connector shafts through an otherwise solid slab. A single convex
+## BoxShape3D can't have a hole in it, so a full slab is instead built as the
+## smallest number of rectangular pieces that tile the area minus the holes.
+func _rects_minus_holes(rects: Array, holes: Array, half: float) -> Array:
+	var result: Array = rects
+	for hole in holes:
+		var next: Array = []
+		for r in result:
+			var rect: Rect2 = r
+			var x0 := rect.position.x
+			var z0 := rect.position.y
+			var x1 := x0 + rect.size.x
+			var z1 := z0 + rect.size.y
+			var hx0: float = hole.x - half
+			var hx1: float = hole.x + half
+			var hz0: float = hole.y - half
+			var hz1: float = hole.y + half
+			if hx1 <= x0 or hx0 >= x1 or hz1 <= z0 or hz0 >= z1:
+				next.append(rect)  # hole doesn't touch this piece at all
+				continue
+			# Clip the hole to this rect, then keep the four surrounding strips.
+			var cx0 := maxf(hx0, x0)
+			var cx1 := minf(hx1, x1)
+			var cz0 := maxf(hz0, z0)
+			var cz1 := minf(hz1, z1)
+			if cz0 > z0:
+				next.append(Rect2(Vector2(x0, z0), Vector2(x1 - x0, cz0 - z0)))
+			if cz1 < z1:
+				next.append(Rect2(Vector2(x0, cz1), Vector2(x1 - x0, z1 - cz1)))
+			if cx0 > x0:
+				next.append(Rect2(Vector2(x0, cz0), Vector2(cx0 - x0, cz1 - cz0)))
+			if cx1 < x1:
+				next.append(Rect2(Vector2(cx1, cz0), Vector2(x1 - cx1, cz1 - cz0)))
+		result = next
+	return result
 
 
 # --- world edge ---------------------------------------------------------------
@@ -344,3 +525,118 @@ func _build_snowy_hills() -> void:
 	_add_sphere(Vector3(-30, 2.2, -33), 0.7, SNOW_WHITE, false)
 	_add_sphere(Vector3(-30, 3.2, -33), 0.45, SNOW_WHITE, false)
 	_add_cylinder(Vector3(-30, 3.2, -32.5), 0.02, 0.09, 0.5, Color(0.9, 0.45, 0.1), false)
+
+
+# --- underground: surface ground collision (with 4 entrance-sized holes) ------
+
+func _build_ground_collision() -> void:
+	var half := MAP_HALF
+	var whole: Array = [Rect2(Vector2(-half, -half), Vector2(half * 2.0, half * 2.0))]
+	var holes: Array = ENTRANCE_SHAFTS.values()
+	for r in _rects_minus_holes(whole, holes, SHAFT_RADIUS + 0.15):
+		var rect: Rect2 = r
+		var cx := rect.position.x + rect.size.x * 0.5
+		var cz := rect.position.y + rect.size.y * 0.5
+		_add_collision_box(Vector3(cx, -0.5, cz), Vector3(rect.size.x, 1.0, rect.size.y))
+
+
+# --- underground: tunnel network -----------------------------------------------
+
+func _build_tunnels() -> void:
+	# Level A's floor gets holes where the connector shafts drop to Level B;
+	# Level B is the bottom, so its floor stays solid throughout.
+	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, CONNECTOR_SHAFTS)
+	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [])
+
+	for biome in ENTRANCE_SHAFTS:
+		_build_entrance_shaft(ENTRANCE_SHAFTS[biome], biome)
+	for pos in CONNECTOR_SHAFTS:
+		_build_connector_shaft(pos)
+
+
+func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array) -> void:
+	var cols := rows[0].length()
+	var grid_rows := rows.size()
+	var width := cols * TUNNEL_CELL
+	var depth := grid_rows * TUNNEL_CELL
+
+	var floor_rects: Array = [Rect2(origin, Vector2(width, depth))]
+	for r in _rects_minus_holes(floor_rects, floor_holes, SHAFT_RADIUS + 0.15):
+		var rect: Rect2 = r
+		var cx := rect.position.x + rect.size.x * 0.5
+		var cz := rect.position.y + rect.size.y * 0.5
+		_add_box(Vector3(cx, y - 0.15, cz), Vector3(rect.size.x, 0.3, rect.size.y), TUNNEL_FLOOR_COLOR)
+
+	# Ceiling is purely atmospheric: nobody can jump anywhere near 4m, so it
+	# never needs collision or holes, just something other than open sky
+	# overhead when you look up.
+	_add_visual_slab(Vector3(origin.x + width * 0.5, y + TUNNEL_WALL_HEIGHT, origin.y + depth * 0.5), Vector3(width, 0.3, depth), TUNNEL_CEILING_COLOR)
+
+	for gy in range(grid_rows):
+		var row: String = rows[gy]
+		for gx in range(cols):
+			var x := origin.x + gx * TUNNEL_CELL + TUNNEL_CELL * 0.5
+			var z := origin.y + gy * TUNNEL_CELL + TUNNEL_CELL * 0.5
+			if row[gx] == "#":
+				_add_box(Vector3(x, y + TUNNEL_WALL_HEIGHT * 0.5, z), Vector3(TUNNEL_CELL, TUNNEL_WALL_HEIGHT, TUNNEL_CELL), TUNNEL_ROCK)
+			elif gx % 2 == 1 and gy % 2 == 1:
+				# A "room" cell (not a narrow connector passage) -- light
+				# every other one in a checkerboard so it's never dark
+				# without needing a torch in literally every room.
+				var c := (gx - 1) / 2
+				var r := (gy - 1) / 2
+				if (c + r) % 2 == 0:
+					_add_torch(Vector3(x, y + 2.2, z))
+
+
+func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
+	_build_spiral_ramp(pos, LEVEL_A_Y, -0.15, SHAFT_RADIUS - 0.5)
+	var biome_color: Color = {
+		"forest": FOREST_CANOPY, "farm": BARN_RED, "canyon": CANYON_ROCK, "snow": Color(0.5, 0.72, 0.85, 1),
+	}[biome]
+	# The hole itself: a plain dark disc so it reads as an opening rather than
+	# solid ground, plus an open collar ring standing proud of the surface
+	# (visible from both sides, so it doesn't vanish looking up from inside).
+	_add_cylinder(Vector3(pos.x, 0.03, pos.y), SHAFT_RADIUS, SHAFT_RADIUS, 0.06, Color(0.05, 0.05, 0.06), false)
+	_add_ring(Vector3(pos.x, 0.3, pos.y), SHAFT_RADIUS + 0.25, 0.6, biome_color)
+	_add_sign(Vector3(pos.x + SHAFT_RADIUS + 1.5, 0, pos.y), "MIND THE GAP")
+
+
+func _build_connector_shaft(pos: Vector2) -> void:
+	_build_spiral_ramp(pos, LEVEL_B_Y, LEVEL_A_Y, SHAFT_RADIUS - 0.5)
+	_add_torch(Vector3(pos.x + 1.2, LEVEL_A_Y - 2.0, pos.y))
+	_add_torch(Vector3(pos.x - 1.2, LEVEL_B_Y + 2.5, pos.y))
+
+
+## Winds a walkable staircase of overlapping treads around the inside wall of
+## a vertical shaft from y_bottom to y_top, so "drop down into" (just fall)
+## and "jump out of" (walk the ramp up, hop the last bit) both work with
+## nothing but ordinary gravity and jump height -- no ladders, no teleports.
+func _build_spiral_ramp(center: Vector2, y_bottom: float, y_top: float, radius: float) -> void:
+	var rise := y_top - y_bottom
+	var turns := maxf(1.0, rise / 4.0)
+	var steps_per_turn := 14
+	var steps := int(turns * steps_per_turn)
+	for i in range(steps + 1):
+		var t := float(i) / float(steps)
+		var angle := t * turns * TAU
+		var y := y_bottom + t * rise
+		var tread_pos := Vector3(center.x + cos(angle) * radius, y, center.y + sin(angle) * radius)
+		_add_rotated_box(tread_pos, Vector3(1.8, 0.25, 1.0), angle + PI * 0.5, STONE_GRAY)
+
+
+func _add_ring(pos: Vector3, radius: float, height: float, color: Color) -> void:
+	var mesh := MeshInstance3D.new()
+	mesh.position = pos
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = radius
+	cyl.bottom_radius = radius
+	cyl.height = height
+	cyl.radial_segments = 16
+	cyl.cap_top = false
+	cyl.cap_bottom = false
+	mesh.mesh = cyl
+	var mat := _make_material(color)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh.material_override = mat
+	add_child(mesh)
