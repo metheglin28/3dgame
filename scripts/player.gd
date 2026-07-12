@@ -40,9 +40,9 @@ var wearing_hat: bool = false:
 
 ## Sword-swinging power, granted/revoked by pulling the sword from the stone
 ## in the forest (see sword_stone.gd). Same setter-drives-the-visual pattern
-## as wearing_hat, and same snapshot-based sync. The two powers are mutually
-## exclusive (each granter clears the other) so a click always unambiguously
-## means one thing: throw held item > snowball > sword swing.
+## as wearing_hat, and same snapshot-based sync. All the powers are mutually
+## exclusive (each granter clears the others) so a click always unambiguously
+## means one thing: throw held item > snowball > sword swing > revolver shot.
 var wearing_helmet: bool = false:
 	set(value):
 		wearing_helmet = value
@@ -50,6 +50,20 @@ var wearing_helmet: bool = false:
 			helmet.visible = value
 		if sword:
 			sword.visible = value
+
+## Revolver power, granted/revoked at the coat rack deep in the canyon maze
+## (see coat_rack.gd). Cowboy hat on the head, revolver at the hip.
+var wearing_cowboy_hat: bool = false:
+	set(value):
+		wearing_cowboy_hat = value
+		if cowboy_hat:
+			cowboy_hat.visible = value
+		if revolver:
+			revolver.visible = value
+
+# Server-side revolver rate limit.
+var _shoot_cooldown: float = 0.0
+const SHOOT_COOLDOWN := 0.55
 
 # Server-side swing rate limit; also drives the swing animation duration.
 var _swing_cooldown: float = 0.0
@@ -121,6 +135,8 @@ const NET_SNAP_DISTANCE := 4.0
 # SwordPivot sits at the shoulder and the sword hangs off it, so tweening the
 # pivot's rotation swings the blade through an arc instead of spinning it in place.
 @onready var sword: Node3D = $Mesh/SwordPivot
+@onready var cowboy_hat: Node3D = $Mesh/CowboyHat
+@onready var revolver: Node3D = $Mesh/RevolverPivot
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
 @onready var options_button: Button = $HUD/OptionsButton
@@ -267,6 +283,7 @@ func _physics_process(delta: float) -> void:
 	_coyote_timer = COYOTE_TIME if is_on_floor() else maxf(_coyote_timer - delta, 0.0)
 	_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
 	_swing_cooldown = maxf(_swing_cooldown - delta, 0.0)
+	_shoot_cooldown = maxf(_shoot_cooldown - delta, 0.0)
 	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
 
 	if not is_on_floor():
@@ -404,8 +421,8 @@ func _request_throw() -> void:
 			item.throw_from(self)
 		carried_item_path = NodePath("")
 		return
-	# Nothing held: throw a snowball or swing the sword, whichever power we
-	# have (the granters keep them mutually exclusive, see sword_stone.gd).
+	# Nothing held: use whichever power we have (the granters keep them
+	# mutually exclusive, see sword_stone.gd / coat_rack.gd).
 	if wearing_hat:
 		var world := get_tree().current_scene
 		if world and world.has_method("spawn_snowball"):
@@ -414,6 +431,12 @@ func _request_throw() -> void:
 		_swing_cooldown = SWING_COOLDOWN
 		_do_swing_effects()
 		_play_swing.rpc()
+	elif wearing_cowboy_hat and _shoot_cooldown <= 0.0:
+		_shoot_cooldown = SHOOT_COOLDOWN
+		var world := get_tree().current_scene
+		if world and world.has_method("spawn_bullet"):
+			world.spawn_bullet(self)
+			_play_shoot.rpc()
 
 
 ## Server-only: the gameplay half of a swing. Shoves any physics prop (items,
@@ -453,6 +476,15 @@ func _do_swing_effects() -> void:
 		c.apply_knockback((to_char * Vector3(1, 0, 1)).normalized(), SWING_KNOCKBACK)
 
 
+## Cosmetic revolver recoil: the barrel kicks up and settles back.
+@rpc("authority", "call_local", "reliable")
+func _play_shoot() -> void:
+	var tween := create_tween()
+	revolver.rotation.x = 0.0
+	tween.tween_property(revolver, "rotation:x", 0.7, 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(revolver, "rotation:x", 0.0, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+
+
 ## Cosmetic swing arc, played identically on every peer (reliable broadcast,
 ## same pattern as the door toggle -- rare events don't go in the snapshot).
 @rpc("authority", "call_local", "reliable")
@@ -483,6 +515,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	_has_net_state = true
 	wearing_hat = state["hat"]
 	wearing_helmet = state["helmet"]
+	wearing_cowboy_hat = state["cowboy"]
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
 

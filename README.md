@@ -67,8 +67,13 @@ same ranges the sliders allow.
   hands staying empty. Talk to him again to take it off.
 - **A sword in a stone** in the forest clearing — pull it to don a knight
   helmet and a sword; while you have it, click to swing, which knocks nearby
-  props (and snowballs) flying. Interact again to put it back. You can hold
-  the sword *or* the snowball hat, not both — each one replaces the other.
+  props (and snowballs) flying. Interact again to put it back.
+- **A coat rack** deep in the canyon maze (next to Dave, who denies
+  everything) with a cowboy hat on it — take it to don the hat and a
+  revolver; click to fire a small, very fast bullet that ragdolls whatever
+  it hits with the hardest knockback in the game. You can hold only one
+  power at a time — snowball hat, sword, or revolver; each one replaces
+  the others.
 - **A goblin cave** in the forest's NE corner: a rocky mouth with skull
   stakes that burrows due north in one straight line of rooms, descending
   as it goes — entry tunnel and goblin warren at the surface, a long

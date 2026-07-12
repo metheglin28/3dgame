@@ -15,6 +15,7 @@ func on_interact(by: Node3D) -> void:
 	by.wearing_helmet = not by.wearing_helmet
 	if by.wearing_helmet:
 		by.wearing_hat = false
+		by.wearing_cowboy_hat = false
 
 
 func get_interact_prompt() -> String:

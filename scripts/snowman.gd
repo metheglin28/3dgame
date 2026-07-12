@@ -10,9 +10,10 @@ func on_interact(by: Node3D) -> void:
 		return
 	by.wearing_hat = not by.wearing_hat
 	if by.wearing_hat:
-		# Powers are mutually exclusive with the sword (see sword_stone.gd),
+		# Powers are mutually exclusive (see sword_stone.gd / coat_rack.gd),
 		# so a click always unambiguously means one thing.
 		by.wearing_helmet = false
+		by.wearing_cowboy_hat = false
 
 
 func get_interact_prompt() -> String:

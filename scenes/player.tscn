@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/options_menu.gd" id="2"]
@@ -68,6 +68,30 @@ size = Vector3(0.4, 0.07, 0.09)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gold"]
 albedo_color = Color(0.8, 0.65, 0.2, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cowboy_brim"]
+top_radius = 0.55
+bottom_radius = 0.55
+height = 0.05
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cowboy_crown"]
+top_radius = 0.26
+bottom_radius = 0.32
+height = 0.32
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cowboy"]
+albedo_color = Color(0.55, 0.36, 0.18, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_barrel"]
+size = Vector3(0.05, 0.05, 0.34)
+
+[sub_resource type="BoxMesh" id="BoxMesh_grip"]
+size = Vector3(0.05, 0.16, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gunmetal"]
+albedo_color = Color(0.25, 0.26, 0.3, 1)
+metallic = 0.7
+roughness = 0.35
 
 [sub_resource type="LabelSettings" id="LabelSettings_1"]
 font_size = 32
@@ -145,6 +169,33 @@ surface_material_override/0 = SubResource("StandardMaterial3D_gold")
 transform = Transform3D(0.5, 0, 0, 0, 2.8, 0, 0, 0, 1.2, 0, 0.02, 0)
 mesh = SubResource("BoxMesh_guard")
 surface_material_override/0 = SubResource("StandardMaterial3D_gold")
+
+[node name="CowboyHat" type="Node3D" parent="Mesh"]
+transform = Transform3D(0.9962, 0, 0.0872, 0, 1, 0, -0.0872, 0, 0.9962, 0, 0.95, 0)
+visible = false
+
+[node name="Brim" type="MeshInstance3D" parent="Mesh/CowboyHat"]
+mesh = SubResource("CylinderMesh_cowboy_brim")
+surface_material_override/0 = SubResource("StandardMaterial3D_cowboy")
+
+[node name="Crown" type="MeshInstance3D" parent="Mesh/CowboyHat"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.18, 0)
+mesh = SubResource("CylinderMesh_cowboy_crown")
+surface_material_override/0 = SubResource("StandardMaterial3D_cowboy")
+
+[node name="RevolverPivot" type="Node3D" parent="Mesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.05, -0.2)
+visible = false
+
+[node name="Barrel" type="MeshInstance3D" parent="Mesh/RevolverPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -0.14)
+mesh = SubResource("BoxMesh_barrel")
+surface_material_override/0 = SubResource("StandardMaterial3D_gunmetal")
+
+[node name="Grip" type="MeshInstance3D" parent="Mesh/RevolverPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.9397, 0.342, 0, -0.342, 0.9397, 0, -0.05, 0.04)
+mesh = SubResource("BoxMesh_grip")
+surface_material_override/0 = SubResource("StandardMaterial3D_cowboy")
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)

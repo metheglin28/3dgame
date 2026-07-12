@@ -7,6 +7,7 @@ extends Node3D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const SNOWBALL_SCENE := preload("res://scenes/snowball.tscn")
+const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 
 @onready var players_node: Node3D = $Players
 @onready var spawner: MultiplayerSpawner = $Players/MultiplayerSpawner
@@ -30,7 +31,7 @@ func _ready() -> void:
 	add_child(projectiles_node)
 	projectile_spawner = MultiplayerSpawner.new()
 	projectile_spawner.spawn_path = projectiles_node.get_path()
-	projectile_spawner.spawn_function = _spawn_snowball
+	projectile_spawner.spawn_function = _spawn_projectile
 	projectiles_node.add_child(projectile_spawner)
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -88,7 +89,7 @@ func _physics_process(_delta: float) -> void:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
 		# (see player.gd for why).
-		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "tumble": p.tumble}
+		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "tumble": p.tumble}
 	for item in get_tree().get_nodes_in_group("sync_items"):
 		snapshot["items"][item.get_path()] = {"xform": item.global_transform, "held": item.carried_by}
 	for npc in get_tree().get_nodes_in_group("npc"):
@@ -119,23 +120,33 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 
 
 ## Called by a player (server-side only, see player.gd's _request_throw) to
-## launch a snowball from their hold point. Spawned dynamically via
-## projectile_spawner so every peer gets a replicated copy.
+## launch a projectile from their hold point. Spawned dynamically via
+## projectile_spawner so every peer gets a replicated copy; "kind" picks the
+## scene, so new projectile types are one dictionary entry away.
 func spawn_snowball(thrower: Node3D) -> void:
+	_spawn_from(thrower, "snowball")
+
+
+func spawn_bullet(shooter: Node3D) -> void:
+	_spawn_from(shooter, "bullet")
+
+
+func _spawn_from(shooter: Node3D, kind: String) -> void:
 	if not multiplayer.is_server():
 		return
 	var id := _next_projectile_id
 	_next_projectile_id += 1
-	var data := {"id": id, "xform": thrower.hold_point.global_transform, "peer": thrower.peer_id}
+	var data := {"id": id, "kind": kind, "xform": shooter.hold_point.global_transform, "peer": shooter.peer_id}
 	projectile_spawner.spawn(data)
 
 
-func _spawn_snowball(data: Dictionary) -> Node:
-	var s := SNOWBALL_SCENE.instantiate()
-	s.name = "Snowball%d" % int(data["id"])
+func _spawn_projectile(data: Dictionary) -> Node:
+	var scene: PackedScene = BULLET_SCENE if data["kind"] == "bullet" else SNOWBALL_SCENE
+	var s := scene.instantiate()
+	s.name = "%s%d" % [str(data["kind"]).capitalize(), int(data["id"])]
 	s.global_transform = data["xform"]
 	if multiplayer.is_server():
-		var thrower: Node3D = player_nodes.get(int(data["peer"]))
-		if thrower:
-			s.launch_from(thrower)
+		var shooter: Node3D = player_nodes.get(int(data["peer"]))
+		if shooter:
+			s.launch_from(shooter)
 	return s

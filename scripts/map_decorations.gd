@@ -20,6 +20,7 @@ extends Node3D
 const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
 const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
 const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
+const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
 
 const MAP_HALF := 60.0
 
@@ -945,6 +946,13 @@ func _build_canyon_maze() -> void:
 			var x := MAZE_ORIGIN_X + (c + 0.5) * MAZE_CELL
 			var z := MAZE_ORIGIN_Z - (r + 0.5) * MAZE_CELL
 			_add_box(Vector3(x, MAZE_WALL_HEIGHT * 0.5, z), Vector3(MAZE_CELL, MAZE_WALL_HEIGHT, MAZE_CELL), CANYON_ROCK)
+
+	# A coat rack with a cowboy hat, in the deep pocket next to Dave and the
+	# prize (cell col 7, row 7) -- grants the revolver power (see coat_rack.gd).
+	# Nobody knows who left it here. Dave denies everything.
+	var rack := COAT_RACK_SCENE.instantiate()
+	rack.position = Vector3(49.5, 0, -51)
+	add_child(rack)
 
 
 # --- SW: snowy hills ---------------------------------------------------------------
