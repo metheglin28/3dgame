@@ -103,7 +103,13 @@ same ranges the sliders allow.
   the upper and lower levels the same way. The maze layout is baked as a
   literal grid (no runtime randomness) generated once offline to guarantee
   every room has at least two connections — no dead ends, always another way
-  through — and lit with scattered torches so it's never pitch black. The
+  through. The upper level is warm brown rock lit by torches; the lower
+  level is the **gem caverns** — darker, grayer rock studded with hundreds
+  of glowing crystals in seven colors (spikes, shards, and nodules poking
+  from every corridor wall, more hanging from room ceilings), lit by
+  floor-standing crystal clusters that each cast their own colored light.
+  Gem placement comes from a fixed seed, so like everything else on the
+  map it's identical every run and on every peer. The
   third-person camera sweeps a small sphere so it pulls in against walls
   instead of clipping through them, and the thin shaft/ceiling meshes are
   single-sided so the camera never gets blinded by one filling the screen

@@ -76,6 +76,20 @@ const TUNNEL_WALL_HEIGHT := 4.0
 const TUNNEL_ROCK := Color(0.3, 0.28, 0.27, 1)
 const TUNNEL_FLOOR_COLOR := Color(0.24, 0.22, 0.21, 1)
 const TUNNEL_CEILING_COLOR := Color(0.18, 0.17, 0.16, 1)
+## Level B, the gem caverns: darker and grayer than Level A's warm brown,
+## so the glowing crystals carry the color instead of the rock.
+const DEEP_ROCK := Color(0.16, 0.16, 0.19, 1)
+const DEEP_FLOOR_COLOR := Color(0.12, 0.12, 0.14, 1)
+const DEEP_CEILING_COLOR := Color(0.09, 0.09, 0.11, 1)
+const GEM_COLORS: Array[Color] = [
+	Color(1.0, 0.3, 0.5),   # rose
+	Color(0.3, 0.9, 1.0),   # ice blue
+	Color(1.0, 0.8, 0.25),  # gold
+	Color(0.4, 1.0, 0.5),   # emerald
+	Color(0.8, 0.4, 1.0),   # amethyst
+	Color(0.35, 0.5, 1.0),  # sapphire
+	Color(1.0, 0.55, 0.2),  # amber
+]
 const SHAFT_RADIUS := 2.2
 const TORCH_COLOR := Color(1.0, 0.65, 0.3, 1)
 
@@ -881,9 +895,13 @@ func _build_ground_collision() -> void:
 
 func _build_tunnels() -> void:
 	# Level A's floor gets holes where the connector shafts drop to Level B;
-	# Level B is the bottom, so its floor stays solid throughout.
-	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, CONNECTOR_SHAFTS)
-	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [])
+	# Level B is the bottom, so its floor stays solid throughout. Level A is
+	# warm brown rock lit by torches; Level B is darker, grayer, and studded
+	# with glowing gems -- the deeper you go, the stranger it gets.
+	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, CONNECTOR_SHAFTS,
+		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false)
+	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [],
+		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true)
 
 	for biome in ENTRANCE_SHAFTS:
 		_build_entrance_shaft(ENTRANCE_SHAFTS[biome], biome)
@@ -891,23 +909,31 @@ func _build_tunnels() -> void:
 		_build_connector_shaft(pos)
 
 
-func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array) -> void:
+func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array,
+		rock: Color, floor_color: Color, ceiling_color: Color, gems: bool) -> void:
 	var cols := rows[0].length()
 	var grid_rows := rows.size()
 	var width := cols * TUNNEL_CELL
 	var depth := grid_rows * TUNNEL_CELL
+
+	# Gem placement uses a FIXED-seed sequence: the layout is byte-identical
+	# on every run and every peer (same rule as the rest of the map -- this is
+	# authored variety, not runtime randomness; the seed is just a compact way
+	# of writing several hundred hand-ish-placed crystals).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0xC4E5
 
 	var floor_rects: Array = [Rect2(origin, Vector2(width, depth))]
 	for r in _rects_minus_holes(floor_rects, floor_holes, SHAFT_RADIUS + 0.15):
 		var rect: Rect2 = r
 		var cx := rect.position.x + rect.size.x * 0.5
 		var cz := rect.position.y + rect.size.y * 0.5
-		_add_box(Vector3(cx, y - 0.15, cz), Vector3(rect.size.x, 0.3, rect.size.y), TUNNEL_FLOOR_COLOR)
+		_add_box(Vector3(cx, y - 0.15, cz), Vector3(rect.size.x, 0.3, rect.size.y), floor_color)
 
 	# Ceiling is purely atmospheric: nobody can jump anywhere near 4m, so it
 	# never needs collision or holes, just something other than open sky
 	# overhead when you look up.
-	_add_visual_slab(Vector3(origin.x + width * 0.5, y + TUNNEL_WALL_HEIGHT, origin.y + depth * 0.5), Vector3(width, 0.3, depth), TUNNEL_CEILING_COLOR)
+	_add_visual_slab(Vector3(origin.x + width * 0.5, y + TUNNEL_WALL_HEIGHT, origin.y + depth * 0.5), Vector3(width, 0.3, depth), ceiling_color)
 
 	for gy in range(grid_rows):
 		var row: String = rows[gy]
@@ -915,15 +941,96 @@ func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_h
 			var x := origin.x + gx * TUNNEL_CELL + TUNNEL_CELL * 0.5
 			var z := origin.y + gy * TUNNEL_CELL + TUNNEL_CELL * 0.5
 			if row[gx] == "#":
-				_add_box(Vector3(x, y + TUNNEL_WALL_HEIGHT * 0.5, z), Vector3(TUNNEL_CELL, TUNNEL_WALL_HEIGHT, TUNNEL_CELL), TUNNEL_ROCK)
+				_add_box(Vector3(x, y + TUNNEL_WALL_HEIGHT * 0.5, z), Vector3(TUNNEL_CELL, TUNNEL_WALL_HEIGHT, TUNNEL_CELL), rock)
+				if gems:
+					# Stud every wall face that borders open corridor with a
+					# handful of glowing crystals, poking out at odd angles.
+					for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						var nx := gx + d.x
+						var ny := gy + d.y
+						if nx < 0 or nx >= cols or ny < 0 or ny >= grid_rows:
+							continue
+						if rows[ny][nx] == "#":
+							continue
+						var out := Vector3(d.x, 0, d.y)
+						var lateral := Vector3(out.z, 0, -out.x)
+						var face := Vector3(x, y + TUNNEL_WALL_HEIGHT * 0.5, z) + out * (TUNNEL_CELL * 0.5)
+						for k in range(2 + rng.randi_range(0, 2)):
+							var p := face + lateral * rng.randf_range(-2.0, 2.0) + Vector3.UP * rng.randf_range(-1.5, 1.5)
+							var tilt := (out + lateral * rng.randf_range(-0.5, 0.5) + Vector3.UP * rng.randf_range(-0.3, 0.6)).normalized()
+							_add_gem(p, tilt, rng.randf_range(0.25, 0.7), GEM_COLORS[rng.randi_range(0, GEM_COLORS.size() - 1)], rng.randi_range(0, 2), rng.randf() < 0.2)
 			elif gx % 2 == 1 and gy % 2 == 1:
-				# A "room" cell (not a narrow connector passage) -- light
-				# every other one in a checkerboard so it's never dark
-				# without needing a torch in literally every room.
+				# A "room" cell (not a narrow connector passage). Light every
+				# other one in a checkerboard so it's never dark without a
+				# light in literally every room: torches up on Level A, glowing
+				# floor crystal clusters down in the gem caverns, plus a couple
+				# of crystals hanging from each room's ceiling.
 				var c := (gx - 1) / 2
 				var r := (gy - 1) / 2
-				if (c + r) % 2 == 0:
+				if gems:
+					for k in range(2):
+						var hp := Vector3(x + rng.randf_range(-1.8, 1.8), y + TUNNEL_WALL_HEIGHT - 0.1, z + rng.randf_range(-1.8, 1.8))
+						var hang := (Vector3.DOWN + Vector3(rng.randf_range(-0.3, 0.3), 0, rng.randf_range(-0.3, 0.3))).normalized()
+						_add_gem(hp, hang, rng.randf_range(0.3, 0.6), GEM_COLORS[rng.randi_range(0, GEM_COLORS.size() - 1)], 0, false)
+					if (c + r) % 2 == 0:
+						_add_gem_cluster(Vector3(x, y, z), GEM_COLORS[(c * 3 + r) % GEM_COLORS.size()], rng)
+				elif (c + r) % 2 == 0:
 					_add_torch(Vector3(x, y + 2.2, z))
+
+
+## A single glowing crystal embedded in rock: `out_dir` is the direction it
+## pokes out along (its base sits at `pos`, sunk slightly in). Shapes: 0 = a
+## six-sided spike, 1 = a squared shard, 2 = a rounded nodule. All of them
+## glow via emissive material; `bright` ones glow harder. Purely decorative.
+func _add_gem(pos: Vector3, out_dir: Vector3, size: float, color: Color, shape: int, bright: bool) -> void:
+	var mesh := MeshInstance3D.new()
+	var y_axis := out_dir.normalized()
+	var helper := Vector3.UP if absf(y_axis.dot(Vector3.UP)) < 0.9 else Vector3.RIGHT
+	var x_axis := helper.cross(y_axis).normalized()
+	var z_axis := x_axis.cross(y_axis)
+	mesh.transform = Transform3D(Basis(x_axis, y_axis, z_axis), pos + y_axis * (size * 0.3))
+	match shape:
+		0:
+			var spike := CylinderMesh.new()
+			spike.top_radius = 0.0
+			spike.bottom_radius = size * 0.3
+			spike.height = size
+			spike.radial_segments = 6
+			mesh.mesh = spike
+		1:
+			var shard := BoxMesh.new()
+			shard.size = Vector3(size * 0.35, size, size * 0.22)
+			mesh.mesh = shard
+		_:
+			var orb := SphereMesh.new()
+			orb.radius = size * 0.35
+			orb.height = size * 0.7
+			mesh.mesh = orb
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color.darkened(0.4)
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 2.5 if bright else 1.2
+	mesh.material_override = mat
+	mesh.add_to_group("gems")
+	add_child(mesh)
+
+
+## A floor-standing clump of crystals that actually CASTS light -- Level B's
+## answer to the torch. One hue per cluster so each room has its own glow.
+func _add_gem_cluster(floor_pos: Vector3, color: Color, rng: RandomNumberGenerator) -> void:
+	for k in range(5):
+		var a := TAU * float(k) / 5.0 + rng.randf_range(-0.3, 0.3)
+		var p := floor_pos + Vector3(cos(a) * rng.randf_range(0.3, 0.8), 0, sin(a) * rng.randf_range(0.3, 0.8))
+		var tilt := (Vector3.UP + Vector3(cos(a) * 0.35, 0, sin(a) * 0.35)).normalized()
+		_add_gem(p, tilt, rng.randf_range(0.5, 1.1), color, 0 if k % 3 != 2 else 1, k == 0)
+	_add_gem(floor_pos, Vector3.UP, 0.5, color, 2, false)
+	var light := OmniLight3D.new()
+	light.position = floor_pos + Vector3(0, 1.2, 0)
+	light.light_color = color
+	light.light_energy = 1.4
+	light.omni_range = 8.0
+	add_child(light)
 
 
 func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
