@@ -120,6 +120,15 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	_ai(delta)
+	move_and_slide()
+
+
+## The upright brain, called every physics tick when not ragdolled (gravity
+## and knockback recovery are already handled). The default is the harmless
+## wander; subclasses override this for less harmless behavior (see goblin.gd)
+## and can fall back to `super(delta)` to wander when idle.
+func _ai(delta: float) -> void:
 	var to_target := _target - global_position
 	to_target.y = 0.0
 	if to_target.length() < 0.3:
@@ -133,8 +142,6 @@ func _physics_process(delta: float) -> void:
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
 		rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), 8.0 * delta)
-
-	move_and_slide()
 
 
 func _pick_new_target() -> void:

@@ -78,9 +78,11 @@ same ranges the sliders allow.
   for now, not lootable). The line runs out past the map's north edge
   through a gap in the perimeter wall (sealed by the cave itself), into
   space a future map expansion will fill in. **Six goblins** live along the
-  line (plus a lookout outside) — small, pointy-eared, in assorted greens
-  from yellowish to dark moss, no name tags, no chit-chat: they just skulk
-  around their rooms (and get ragdolled). A troll is still planned.
+  line — small, pointy-eared, in assorted greens from yellowish to dark
+  moss, each carrying a little dagger. Enter the cave and the nearby ones
+  hunt you down and stab, knocking you flying (a dagger hits softer than
+  your sword); leave the cave and they give up and slink back to their
+  rooms — they never chase outside. A troll is still planned.
 - **A duck pond** on the farm — a shallow, shin-deep basin with gently
   sloped shores (wade in, wade out; never deep enough to swim). Wading slows
   you to ~65% speed, expanding ripple rings follow anyone moving through the

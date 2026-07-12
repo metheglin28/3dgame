@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/goblin.gd" id="1"]
 
@@ -18,6 +18,20 @@ top_radius = 0.01
 bottom_radius = 0.13
 height = 0.45
 radial_segments = 6
+
+[sub_resource type="BoxMesh" id="BoxMesh_dblade"]
+size = Vector3(0.06, 0.5, 0.03)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dblade"]
+albedo_color = Color(0.85, 0.87, 0.9, 1)
+metallic = 0.8
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_dguard"]
+size = Vector3(0.16, 0.04, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dgold"]
+albedo_color = Color(0.8, 0.65, 0.2, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_1"]
 font_size = 28
@@ -47,6 +61,24 @@ surface_material_override/0 = SubResource("StandardMaterial3D_1")
 transform = Transform3D(0.4226, 0.9063, 0, -0.9063, 0.4226, 0, 0, 0, 1, 0.31, 0.33, 0)
 mesh = SubResource("CylinderMesh_ear")
 surface_material_override/0 = SubResource("StandardMaterial3D_1")
+
+[node name="DaggerPivot" type="Node3D" parent="Mesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.36, -0.05, 0.1)
+
+[node name="Blade" type="MeshInstance3D" parent="Mesh/DaggerPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.28, 0)
+mesh = SubResource("BoxMesh_dblade")
+surface_material_override/0 = SubResource("StandardMaterial3D_dblade")
+
+[node name="Guard" type="MeshInstance3D" parent="Mesh/DaggerPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("BoxMesh_dguard")
+surface_material_override/0 = SubResource("StandardMaterial3D_dgold")
+
+[node name="Hilt" type="MeshInstance3D" parent="Mesh/DaggerPivot"]
+transform = Transform3D(0.45, 0, 0, 0, 2.2, 0, 0, 0, 1.1, 0, -0.04, 0)
+mesh = SubResource("BoxMesh_dguard")
+surface_material_override/0 = SubResource("StandardMaterial3D_dgold")
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

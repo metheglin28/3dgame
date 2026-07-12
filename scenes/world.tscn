@@ -156,9 +156,9 @@ speed = 2.6
 skin_color = Color(0.22, 0.36, 0.16, 1)
 
 [node name="GoblinFizzle" parent="." instance=ExtResource("6")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 43, 0, 39.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 43.1, 0, 44.2)
 npc_name = "Fizzle"
-wander_radius = 2.5
+wander_radius = 1.0
 speed = 2.6
 skin_color = Color(0.6, 0.66, 0.3, 1)
 
