@@ -81,6 +81,11 @@ same ranges the sliders allow.
   line (plus a lookout outside) — small, pointy-eared, in assorted greens
   from yellowish to dark moss, no name tags, no chit-chat: they just skulk
   around their rooms (and get ragdolled). A troll is still planned.
+- **A duck pond** on the farm — a shallow, shin-deep basin with gently
+  sloped shores (wade in, wade out; never deep enough to swim). Wading slows
+  you to ~65% speed, expanding ripple rings follow anyone moving through the
+  water, and two ducks supervise. The water surface renders single-sided so
+  a camera dunked under it sees clear air, not a blue screen.
 - **Ragdoll combat** — nobody has health and nobody dies: getting hit just
   cuts your controls and launches you tumbling end over end until you land,
   skid out, and get back up. The sword ragdolls goblins, villagers, and

@@ -19,6 +19,7 @@ extends Node3D
 
 const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
 const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
+const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
 
 const MAP_HALF := 60.0
 
@@ -36,6 +37,18 @@ const SNOW_WHITE := Color(0.92, 0.94, 0.98, 1)
 const STONE_GRAY := Color(0.55, 0.53, 0.5, 1)
 const BOUNDARY_GRAY := Color(0.5, 0.48, 0.46, 1)
 const PATH_GRAY := Color(0.6, 0.58, 0.55, 1)
+const GRASS_GREEN := Color(0.45, 0.7, 0.4, 1)
+
+## The farm's duck pond: a shallow square basin (mitered corners come free
+## from overlapping full-width shore ramps) sunk into a matching hole in the
+## ground. Shin-deep at most -- you wade, you never swim.
+const POND_CENTER := Vector2(-25.5, 48.2)
+const POND_HALF := 5.6          # hole half-size; shores start here
+const POND_FLOOR_HALF := 3.4    # flat mud floor half-size (2.2m of shore slope)
+const POND_DEPTH := 0.45
+const POND_WATER_Y := -0.12     # water surface; ~0.33 of water over the floor
+const POND_MUD := Color(0.4, 0.33, 0.22, 1)
+const WATER_COLOR := Color(0.25, 0.5, 0.72, 0.55)
 
 ## Canyon maze, hand-drawn: '#' is a solid 5m rock block, '.' is walkable.
 ## Entrance is on the north edge (row 0, facing the town); the far dead end
@@ -441,10 +454,18 @@ func _build_perimeter_walls() -> void:
 
 
 func _build_quadrant_ground() -> void:
+	# The base grass sheet (previously a single 120x120 plane in world.tscn)
+	# is tiled here AROUND the duck pond's hole -- an uncut plane would roof
+	# the sunken basin and hide the water. Same for the farm's color wash.
+	for r in _rects_minus_holes([Rect2(Vector2(-MAP_HALF, -MAP_HALF), Vector2(MAP_HALF * 2.0, MAP_HALF * 2.0))], [POND_CENTER], POND_HALF):
+		var rect: Rect2 = r
+		_add_ground_patch(Vector3(rect.position.x + rect.size.x * 0.5, 0.0, rect.position.y + rect.size.y * 0.5), rect.size, GRASS_GREEN)
 	# Flat color washes so each quadrant reads at a glance; lifted slightly
-	# above the base ground plane to avoid z-fighting.
+	# above the base ground sheet to avoid z-fighting.
 	_add_ground_patch(Vector3(35, 0.01, 35), Vector2(46, 46), FOREST_FLOOR)
-	_add_ground_patch(Vector3(-35, 0.01, 35), Vector2(46, 46), FARM_FIELD)
+	for r in _rects_minus_holes([Rect2(Vector2(-58, 12), Vector2(46, 46))], [POND_CENTER], POND_HALF):
+		var rect: Rect2 = r
+		_add_ground_patch(Vector3(rect.position.x + rect.size.x * 0.5, 0.01, rect.position.y + rect.size.y * 0.5), rect.size, FARM_FIELD)
 	_add_ground_patch(Vector3(35, 0.01, -35), Vector2(46, 46), CANYON_FLOOR)
 	_add_ground_patch(Vector3(-35, 0.01, -35), Vector2(46, 46), SNOW_WHITE)
 
@@ -827,10 +848,89 @@ func _build_farm() -> void:
 	_add_box(Vector3(-21, 1.9, 30), Vector3(1.4, 0.15, 0.15), FENCE_WOOD)
 	_add_sphere(Vector3(-21, 2.5, 30), 0.3, Color(0.9, 0.8, 0.5), false)
 
-	# Hay bales by the east fence.
-	_add_cylinder(Vector3(-20, 0.7, 48), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
-	_add_cylinder(Vector3(-23, 0.7, 50), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
-	_add_cylinder(Vector3(-20.5, 0.7, 52), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
+	# Hay bales by the east fence, south end (the pond took their old spot).
+	_add_cylinder(Vector3(-18, 0.7, 21.5), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
+	_add_cylinder(Vector3(-19.5, 0.7, 24), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
+	_add_cylinder(Vector3(-17.8, 0.7, 26.5), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
+
+	_build_pond()
+
+
+## The duck pond. The bowl is four full-width shore ramps (one per side)
+## plus a flat mud floor: where two perpendicular ramps overlap in a corner,
+## whichever surface is higher wins for walking, which miters the corner for
+## free. The water is a thin translucent slab rendered single-sided, so a
+## camera dunked below the surface sees clear air instead of a blue screen
+## (same lesson as the shaft tubes). Wading ripples and the wading-slowdown
+## zone live on a PondRipples node; ducks included, as the name demands.
+func _build_pond() -> void:
+	var cx := POND_CENTER.x
+	var cz := POND_CENTER.y
+	var rim := POND_HALF + 0.1  # tuck the shore lip a hair over the grass seam
+	var w := POND_HALF * 2.0 + 0.2
+	_add_box(Vector3(cx, -POND_DEPTH - 0.15, cz), Vector3(POND_FLOOR_HALF * 2.0 + 0.4, 0.3, POND_FLOOR_HALF * 2.0 + 0.4), POND_MUD)
+	_add_ramp(Vector3(cx, 0.02, cz - rim), Vector3(cx, -POND_DEPTH, cz - POND_FLOOR_HALF), w, POND_MUD)
+	_add_ramp(Vector3(cx, 0.02, cz + rim), Vector3(cx, -POND_DEPTH, cz + POND_FLOOR_HALF), w, POND_MUD)
+	_add_ramp(Vector3(cx - rim, 0.02, cz), Vector3(cx - POND_FLOOR_HALF, -POND_DEPTH, cz), w, POND_MUD)
+	_add_ramp(Vector3(cx + rim, 0.02, cz), Vector3(cx + POND_FLOOR_HALF, -POND_DEPTH, cz), w, POND_MUD)
+
+	var water := MeshInstance3D.new()
+	water.position = Vector3(cx, POND_WATER_Y - 0.01, cz)
+	var slab := BoxMesh.new()
+	slab.size = Vector3(POND_HALF * 2.0 - 0.4, 0.02, POND_HALF * 2.0 - 0.4)
+	water.mesh = slab
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = WATER_COLOR
+	mat.roughness = 0.15
+	mat.metallic = 0.2
+	water.material_override = mat
+	add_child(water)
+
+	var ripples: Node3D = POND_RIPPLES.new()
+	ripples.position = Vector3(cx, POND_WATER_Y, cz)
+	ripples.half = POND_HALF
+	add_child(ripples)
+
+	_add_duck(Vector3(cx - 1.5, POND_WATER_Y, cz - 1.0), 0.7)
+	_add_duck(Vector3(cx + 1.8, POND_WATER_Y, cz + 1.6), -1.8)
+	_add_sign(Vector3(cx - POND_HALF - 1.5, 0, cz - POND_HALF - 1.2), "DUCK POND")
+
+
+## A duck: white sphere body, sphere head, orange cone beak. Floats where you
+## put it and contemplates nothing. Faces -z at yaw 0. No collision.
+func _add_duck(pos: Vector3, yaw: float) -> void:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	add_child(root)
+	var white := _make_material(Color(0.95, 0.94, 0.9, 1))
+	var body := MeshInstance3D.new()
+	var bs := SphereMesh.new()
+	bs.radius = 0.28
+	bs.height = 0.46
+	body.mesh = bs
+	body.position = Vector3(0, 0.1, 0)
+	body.material_override = white
+	root.add_child(body)
+	var head := MeshInstance3D.new()
+	var hs := SphereMesh.new()
+	hs.radius = 0.13
+	hs.height = 0.26
+	head.mesh = hs
+	head.position = Vector3(0, 0.35, -0.22)
+	head.material_override = white
+	root.add_child(head)
+	var beak := MeshInstance3D.new()
+	var bk := CylinderMesh.new()
+	bk.top_radius = 0.0
+	bk.bottom_radius = 0.05
+	bk.height = 0.16
+	beak.mesh = bk
+	beak.position = Vector3(0, 0.33, -0.38)
+	beak.rotation.x = -PI * 0.5
+	beak.material_override = _make_material(Color(0.95, 0.6, 0.15, 1))
+	root.add_child(beak)
 
 
 # --- SE: canyon maze --------------------------------------------------------------
@@ -884,7 +984,11 @@ func _build_ground_collision() -> void:
 	var half := MAP_HALF
 	var whole: Array = [Rect2(Vector2(-half, -half), Vector2(half * 2.0, half * 2.0))]
 	var holes: Array = ENTRANCE_SHAFTS.values()
-	for r in _rects_minus_holes(whole, holes, SHAFT_RADIUS + 0.15):
+	var rects := _rects_minus_holes(whole, holes, SHAFT_RADIUS + 0.15)
+	# The duck pond's basin needs its own hole (its shores and floor supply
+	# the collision inside it).
+	rects = _rects_minus_holes(rects, [POND_CENTER], POND_HALF)
+	for r in rects:
 		var rect: Rect2 = r
 		var cx := rect.position.x + rect.size.x * 0.5
 		var cz := rect.position.y + rect.size.y * 0.5

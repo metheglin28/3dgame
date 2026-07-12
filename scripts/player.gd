@@ -295,6 +295,11 @@ func _physics_process(delta: float) -> void:
 		_coyote_timer = 0.0
 
 	var speed := SPEED * SPRINT_MULTIPLIER if _pending_sprint else SPEED
+	# Wading: shallow water is charming, but it is not fast.
+	for w in get_tree().get_nodes_in_group("water"):
+		if w.is_wading(global_position):
+			speed *= 0.65
+			break
 	var basis_yaw := Basis(Vector3.UP, camera_yaw)
 	var direction := (basis_yaw * Vector3(_pending_move.x, 0, _pending_move.y))
 	if direction.length() > 0.001:
