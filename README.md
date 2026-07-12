@@ -69,15 +69,18 @@ same ranges the sliders allow.
   helmet and a sword; while you have it, click to swing, which knocks nearby
   props (and snowballs) flying. Interact again to put it back. You can hold
   the sword *or* the snowball hat, not both — each one replaces the other.
-- **A goblin cave** in the forest's NE corner: a rocky knoll with a
-  skull-staked mouth. Inside it's one continuous line — entry tunnel, low
-  goblin warren, snaking hall, campfire-lit main chamber tall enough for a
-  troll, another snaking hall, then a small treasure room (chest and gold —
-  set dressing for now, not lootable). The rooms are sized for their
-  tenants: **six goblins** now live along the line (plus a lookout outside)
-  — small, pointy-eared, in assorted greens from yellowish to dark moss.
-  They wander their own rooms and mouth off if you bother them. A troll is
-  still planned.
+- **A goblin cave** in the forest's NE corner: a rocky mouth with skull
+  stakes that burrows due north in one straight line of rooms, descending
+  as it goes — entry tunnel and low goblin warren at the surface, a long
+  torch-lit snaking hall ramping down to the campfire-lit main chamber
+  (~4.5m down, tall enough for a troll), then another long hall down to the
+  treasure room at ~8.5m below the surface (chest and gold — set dressing
+  for now, not lootable). The line runs out past the map's north edge
+  through a gap in the perimeter wall (sealed by the cave itself), into
+  space a future map expansion will fill in. **Six goblins** live along the
+  line (plus a lookout outside) — small, pointy-eared, in assorted greens
+  from yellowish to dark moss. They wander their own rooms and mouth off if
+  you bother them. A troll is still planned.
 - **Ragdoll combat** — nobody has health and nobody dies: getting hit just
   cuts your controls and launches you tumbling end over end until you land,
   skid out, and get back up. The sword ragdolls goblins, villagers, and

@@ -416,7 +416,12 @@ func _rects_minus_holes(rects: Array, holes: Array, half: float) -> Array:
 
 func _build_perimeter_walls() -> void:
 	var h := MAP_HALF
-	_add_box(Vector3(0, 2, h), Vector3(h * 2.0, 4, 1), BOUNDARY_GRAY)
+	# North wall is split around x 44.5..48.5: the goblin cave's first hall
+	# crosses the boundary there on its way down (see _build_cave). The hall's
+	# own walls seal the gap; a lintel closes the wall face above its roof.
+	_add_box(Vector3((-h + 44.5) * 0.5, 2, h), Vector3(44.5 + h, 4, 1), BOUNDARY_GRAY)
+	_add_box(Vector3((48.5 + h) * 0.5, 2, h), Vector3(h - 48.5, 4, 1), BOUNDARY_GRAY)
+	_add_box(Vector3(46.5, 3.6, h), Vector3(4.2, 0.9, 1), BOUNDARY_GRAY)
 	_add_box(Vector3(0, 2, -h), Vector3(h * 2.0, 4, 1), BOUNDARY_GRAY)
 	_add_box(Vector3(h, 2, 0), Vector3(1, 4, h * 2.0), BOUNDARY_GRAY)
 	_add_box(Vector3(-h, 2, 0), Vector3(1, 4, h * 2.0), BOUNDARY_GRAY)
@@ -511,38 +516,47 @@ func _build_forest() -> void:
 
 # --- NE: the goblin cave -----------------------------------------------------------
 
-## An above-ground cave dug into a rocky knoll in the forest's NE corner --
-## the future home of the goblins and trolls, so it's sized for both: the
-## entry tunnel and the side warren are goblin-scale (low ceilings, cramped),
-## while the main chamber has 5.5m of headroom so a troll can stand up and
-## swing something. A narrow gap in the east wall leads to a small treasure
-## room. Skull decor and a campfire included, as any respectable goblin den
-## requires. One continuous line, no branches -- every visitor walks the
-## whole gauntlet: mouth, entry tunnel, warren, snaking hall, main chamber,
-## snaking hall, loot room. Rough map (entrance at the bottom, facing town):
+## An above-ground cave mouth in the forest's NE corner that burrows NORTH in
+## one straight line of rooms -- mouth, entry tunnel, goblin warren, long
+## snaking hall, main chamber, long snaking hall, loot room -- descending as
+## it goes: the warren sits at the surface, the chamber ~4.5m down, the loot
+## room ~8.5m down. Rooms are flat (better for goblin leashes and fights);
+## all the descent happens on the halls' ramped straights, with flat landings
+## at every turn, at ramp-walkable grades.
 ##
-##            +----+  +----------------+
-##      +-----|hall|--|  main chamber  |
-##      |warren    |  |  (fire) (tall) |
-##      +-----+----+  +-----+  +--+----+
-##            |entry|  +----+loot|hall|
-##            |tunnel| |loot room+----+
-##            +-----+  +---------+
+## The line deliberately runs OUT past the map's north edge (z=60): inside
+## the map anything below grade would collide with the ground slab and the
+## tunnel network, so the descent begins exactly at the boundary, where both
+## end. The hall punches through a gap in the north perimeter wall (its own
+## walls seal the gap) and everything beyond hangs in the void the future map
+## expansion will fill in. Sized for tenants as before: halls and warren are
+## goblin-scale, the chamber has 5.5m of troll headroom.
+##
+##          [loot]           deepest (-8.5)
+##            ~
+##         hall 2 (long, snaking, ramped)
+##            ~
+##        [chamber]          -4.5, campfire, troll-tall
+##            ~
+##         hall 1 (long, snaking, ramped)
+##   ==== map edge z=60 ====  descent starts here
+##            |
+##        [warren]           surface level
+##         [entry]
+##          mouth            faces the town
 const CAVE_ROCK := Color(0.34, 0.3, 0.27, 1)
 const CAVE_FLOOR := Color(0.28, 0.25, 0.22, 1)
 const BONE_WHITE := Color(0.92, 0.9, 0.82, 1)
 const GOLD := Color(0.95, 0.78, 0.2, 1)
 const CHEST_BROWN := Color(0.45, 0.28, 0.12, 1)
+const HALL_W := 1.8
+const HALL_H := 2.6
 
 func _build_cave() -> void:
-	# Stone floor patches so the inside reads as rock, not grass (the actual
-	# walking surface is still the regular ground collision).
+	# Stone floor patches for the surface-level rooms (their walking surface
+	# is the regular ground); the halls and sunken rooms get real floors.
 	_add_ground_patch(Vector3(43.1, 0.03, 44.2), Vector2(3, 3.5), CAVE_FLOOR)  # entry tunnel
 	_add_ground_patch(Vector3(42.75, 0.03, 48), Vector2(5.5, 4), CAVE_FLOOR)   # warren
-	_add_ground_patch(Vector3(47.4, 0.03, 49.9), Vector2(1.8, 6.6), CAVE_FLOOR) # hall 1
-	_add_ground_patch(Vector3(52.9, 0.03, 52), Vector2(7.2, 8), CAVE_FLOOR)    # main chamber
-	_add_ground_patch(Vector3(54.9, 0.03, 45.7), Vector2(1.8, 2.6), CAVE_FLOOR) # hall 2
-	_add_ground_patch(Vector3(51, 0.03, 43.8), Vector2(4, 3.6), CAVE_FLOOR)    # loot room
 
 	# Entry tunnel: 3 wide (x 41.6..44.6) x 3.5 high, mouth at z 42.5 facing
 	# south toward the town, opening straight into the warren.
@@ -555,96 +569,174 @@ func _build_cave() -> void:
 	_add_sphere(Vector3(40.3, 0.9, 42.2), 1.3, CAVE_ROCK)
 	_add_sphere(Vector3(46.3, 0.9, 42.4), 1.3, CAVE_ROCK)
 
-	# Room 1, the goblin warren: interior x 40..45.5, z 46..50, ceiling 2.6.
+	# Room 1, the goblin warren: interior x 40..45.5, z 46..50, ceiling 2.6,
+	# at surface level. Hall 1 leaves through its NORTH wall (the line goes
+	# straight through the room, south door to north door).
 	_add_box(Vector3(39.5, 1.3, 48), Vector3(1, 2.6, 6), CAVE_ROCK)        # west wall
-	_add_box(Vector3(42.75, 1.3, 50.5), Vector3(7.5, 2.6, 1), CAVE_ROCK)   # north wall
+	_add_box(Vector3(46, 1.3, 48), Vector3(1, 2.6, 6), CAVE_ROCK)          # east wall
 	_add_box(Vector3(40.3, 1.3, 45.5), Vector3(2.6, 2.6, 1), CAVE_ROCK)    # south wall, west of the entry
 	_add_box(Vector3(45.55, 1.3, 45.5), Vector3(1.9, 2.6, 1), CAVE_ROCK)   # south wall, east of the entry
-	_add_box(Vector3(46, 1.3, 45.8), Vector3(1, 2.6, 1.6), CAVE_ROCK)      # east wall, south of the hall doorway
-	_add_box(Vector3(46, 1.3, 49.7), Vector3(1, 2.6, 2.6), CAVE_ROCK)      # east wall, north of it
+	_add_box(Vector3(40.425, 1.3, 50.5), Vector3(2.85, 2.6, 1), CAVE_ROCK) # north wall, west of hall 1
+	_add_box(Vector3(45.075, 1.3, 50.5), Vector3(2.85, 2.6, 1), CAVE_ROCK) # north wall, east of hall 1
 	_add_box(Vector3(42.75, 2.85, 48), Vector3(7.5, 0.5, 6), CAVE_ROCK)    # roof
+	# A modest stepped knoll on top so the mouth reads as dug into a rock
+	# rise (steps under jump height -- players will climb it, that's fine).
+	_add_box(Vector3(42.75, 3.6, 48), Vector3(8.5, 1.0, 7), CAVE_ROCK)
+	_add_box(Vector3(42.75, 4.4, 48.5), Vector3(5.5, 0.8, 4.5), CAVE_ROCK)
 
-	# Hall 1 (warren -> chamber), goblin-scale 1.8 wide x 2.4 high. Snakes:
-	# east out of the warren (z 46.6..48.4), north up the corridor
-	# (x 46.5..48.3), then east again into the chamber (z 51.4..53.2).
-	_add_box(Vector3(47.9, 1.2, 46.1), Vector3(2.8, 2.4, 1), CAVE_ROCK)    # south wall
-	_add_box(Vector3(48.8, 1.2, 46), Vector3(1, 2.4, 2), CAVE_ROCK)        # east wall below the chamber
-	_add_box(Vector3(46, 1.2, 52.6), Vector3(1, 2.4, 3.2), CAVE_ROCK)      # west wall, north stretch
-	_add_box(Vector3(47.4, 1.2, 53.7), Vector3(1.8, 2.4, 1), CAVE_ROCK)    # north cap
-	_add_box(Vector3(47.4, 2.65, 49.9), Vector3(3.8, 0.5, 8.6), CAVE_ROCK) # roof
+	# Hall 1 (warren -> chamber): ~29m of path. Flat until the map edge, then
+	# ramps down 4.5m across three descending straights with flat landings at
+	# every turn. Crosses the perimeter wall through a gap cut for it in
+	# _build_perimeter_walls.
+	_add_corridor([
+		Vector3(42.75, 0.03, 51),    # warren north doorway
+		Vector3(42.75, 0.03, 55.5),  # flat north, then turn E
+		Vector3(46.5, 0.03, 55.5),   # flat east, then turn N
+		Vector3(46.5, 0.03, 61),     # flat north across the map edge; descent starts
+		Vector3(46.5, -2.4, 67.5),   # long ramp down, then turn W
+		Vector3(42.2, -3.5, 67.5),   # ramp down west, then turn N
+		Vector3(42.2, -4.5, 72),     # final ramp down to the chamber doorway
+	])
 
-	# Room 2, the main chamber: interior x 49.3..56.5, z 48..56, ceiling 5.5
-	# (troll headroom). West wall is split around hall 1's arrival, south wall
-	# around hall 2's exit; both openings get headers since the wall is taller
-	# than the halls.
-	_add_box(Vector3(48.8, 2.75, 49.2), Vector3(1, 5.5, 4.4), CAVE_ROCK)   # west wall, south of doorway
-	_add_box(Vector3(48.8, 2.75, 55.1), Vector3(1, 5.5, 3.8), CAVE_ROCK)   # west wall, north of doorway
-	_add_box(Vector3(48.8, 3.95, 52.3), Vector3(1, 3.1, 1.8), CAVE_ROCK)   # header over doorway
-	_add_box(Vector3(52.9, 2.75, 56.5), Vector3(9.2, 5.5, 1), CAVE_ROCK)   # north wall
-	_add_box(Vector3(57, 2.75, 52), Vector3(1, 5.5, 10), CAVE_ROCK)        # east wall
-	_add_box(Vector3(51.15, 2.75, 47.5), Vector3(5.7, 5.5, 1), CAVE_ROCK)  # south wall, west of hall 2
-	_add_box(Vector3(56.65, 2.75, 47.5), Vector3(1.7, 5.5, 1), CAVE_ROCK)  # south wall, east of hall 2
-	_add_box(Vector3(54.9, 3.95, 47.5), Vector3(1.8, 3.1, 1), CAVE_ROCK)   # header over hall 2
-	# Chamber roof plus stepped rock on top, so from outside the whole thing
-	# reads as a knoll (and each step is under jump height, so climbing the
-	# outside of the cave is possible, because of course players will try).
-	_add_box(Vector3(52.9, 5.75, 52), Vector3(9.2, 0.5, 10), CAVE_ROCK)
-	_add_box(Vector3(52.9, 6.5, 52), Vector3(7, 1, 7.5), CAVE_ROCK)
-	_add_box(Vector3(52.9, 7.4, 52.3), Vector3(4.5, 0.8, 5), CAVE_ROCK)
+	# Room 2, the main chamber: interior x 38.2..46.2, z 73..81, floor -4.5,
+	# ceiling 5.5 (troll headroom). Doorways in the south (hall 1) and north
+	# (hall 2) walls, with headers since the walls are taller than the halls.
+	_add_box(Vector3(42.2, -4.65, 77), Vector3(9.8, 0.3, 9.8), CAVE_FLOOR)                # floor
+	_add_box(Vector3(37.7, -1.75, 77), Vector3(1, 6.1, 10), CAVE_ROCK)                    # west wall
+	_add_box(Vector3(46.7, -1.75, 77), Vector3(1, 6.1, 10), CAVE_ROCK)                    # east wall
+	_add_box(Vector3(39.75, -1.75, 72.5), Vector3(3.1, 6.1, 1), CAVE_ROCK)                # south wall, west of doorway
+	_add_box(Vector3(44.9, -1.75, 72.5), Vector3(3.6, 6.1, 1), CAVE_ROCK)                 # south wall, east of doorway
+	_add_box(Vector3(42.2, -0.3, 72.5), Vector3(1.8, 3.3, 1), CAVE_ROCK)                  # header over hall 1
+	_add_box(Vector3(40.85, -1.75, 81.5), Vector3(5.3, 6.1, 1), CAVE_ROCK)                # north wall, west of hall 2
+	_add_box(Vector3(46.0, -1.75, 81.5), Vector3(1.4, 6.1, 1), CAVE_ROCK)                 # north wall, east of hall 2
+	_add_box(Vector3(44.4, -0.3, 81.5), Vector3(1.8, 3.3, 1), CAVE_ROCK)                  # header over hall 2
+	_add_box(Vector3(42.2, 1.25, 77), Vector3(9.8, 0.5, 10), CAVE_ROCK)                   # roof
 
-	# Hall 2 (chamber -> loot room), same scale. Snakes: south out of the
-	# chamber (x 54..55.8), down the corridor (z 44.4..47), then west into
-	# the loot room (z 44.4..45.6).
-	_add_box(Vector3(56.3, 1.2, 45.2), Vector3(1, 2.4, 3.6), CAVE_ROCK)    # east wall
-	_add_box(Vector3(55.4, 1.2, 43.9), Vector3(2.8, 2.4, 1), CAVE_ROCK)    # south cap
-	_add_box(Vector3(53.5, 1.2, 46.3), Vector3(1, 2.4, 1.4), CAVE_ROCK)    # west wall stub above loot doorway
-	_add_box(Vector3(54.9, 2.65, 45.2), Vector3(3.8, 0.5, 3.6), CAVE_ROCK) # roof
+	# Hall 2 (chamber -> loot room): ~16m of path, ramping down another 4m.
+	_add_corridor([
+		Vector3(44.4, -4.5, 82),     # chamber north doorway
+		Vector3(44.4, -5.9, 87.3),   # ramp down north, then turn W
+		Vector3(39.4, -6.9, 87.3),   # ramp down west, then turn N
+		Vector3(39.4, -8.5, 92.5),   # final ramp down to the loot room
+	])
 
-	# Room 3, the loot room: interior x 49..53, z 42..45.6, ceiling 3.2.
-	_add_box(Vector3(48.5, 1.6, 43.8), Vector3(1, 3.2, 5.6), CAVE_ROCK)    # west wall
-	_add_box(Vector3(51, 1.6, 41.5), Vector3(6, 3.2, 1), CAVE_ROCK)        # south wall
-	_add_box(Vector3(51, 1.6, 46.1), Vector3(6, 3.2, 1), CAVE_ROCK)        # north wall
-	_add_box(Vector3(53.5, 1.6, 42.7), Vector3(1, 3.2, 3.4), CAVE_ROCK)    # east wall, south of doorway
-	_add_box(Vector3(53.5, 2.8, 45), Vector3(1, 0.8, 1.2), CAVE_ROCK)      # header over doorway
-	_add_box(Vector3(51, 3.45, 43.8), Vector3(6, 0.5, 5.6), CAVE_ROCK)     # roof
+	# Room 3, the loot room: interior x 37.4..41.4, z 93.5..97, floor -8.5,
+	# ceiling 3.2 -- the deepest point of the cave.
+	_add_box(Vector3(39.4, -8.65, 95.25), Vector3(6, 0.3, 4.5), CAVE_FLOOR)               # floor
+	_add_box(Vector3(36.9, -6.9, 95.25), Vector3(1, 4.2, 4.5), CAVE_ROCK)                 # west wall
+	_add_box(Vector3(41.9, -6.9, 95.25), Vector3(1, 4.2, 4.5), CAVE_ROCK)                 # east wall
+	_add_box(Vector3(39.4, -6.9, 97.5), Vector3(6, 4.2, 1), CAVE_ROCK)                    # north wall
+	_add_box(Vector3(37.95, -6.9, 93), Vector3(1.1, 4.2, 1), CAVE_ROCK)                   # south wall, west of doorway
+	_add_box(Vector3(40.85, -6.9, 93), Vector3(1.1, 4.2, 1), CAVE_ROCK)                   # south wall, east of doorway
+	_add_box(Vector3(39.4, -5.35, 93), Vector3(1.8, 1.1, 1), CAVE_ROCK)                   # header over the doorway
+	_add_box(Vector3(39.4, -5.05, 95.25), Vector3(6, 0.5, 5.5), CAVE_ROCK)                # roof
 
 	# --- decor ---
-	_add_campfire(52.9, 52)
+	_add_campfire(42.2, 77, -4.5)
 	# Trophy skull pile in the chamber's NW corner...
-	_add_skull(Vector3(50.0, 0.2, 55.1), 0.6)
-	_add_skull(Vector3(50.6, 0.2, 55.4), -0.9)
-	_add_skull(Vector3(50.2, 0.2, 54.6), 2.2)
-	_add_skull(Vector3(50.2, 0.55, 55.05), 1.5)
+	_add_skull(Vector3(38.7, -4.3, 80.1), 0.6)
+	_add_skull(Vector3(39.3, -4.3, 80.4), -0.9)
+	_add_skull(Vector3(38.9, -4.3, 79.6), 2.2)
+	_add_skull(Vector3(38.9, -3.95, 80.05), 1.5)
 	# ...a couple scattered around the fire...
-	_add_skull(Vector3(51.2, 0.2, 50.6), 2.8)
-	_add_skull(Vector3(54.6, 0.2, 53.4), -2.0)
-	# ...two in the warren, one guarding the loot.
+	_add_skull(Vector3(40.5, -4.3, 75.6), 2.8)
+	_add_skull(Vector3(43.9, -4.3, 78.4), -2.0)
+	# ...two in the warren, one at a hall landing, one guarding the loot.
 	_add_skull(Vector3(40.8, 0.2, 49.2), 1.1)
 	_add_skull(Vector3(44.5, 0.2, 46.6), -2.6)
-	_add_skull(Vector3(50.0, 0.2, 42.8), -0.4)
+	_add_skull(Vector3(45.9, -2.2, 68.1), 2.4)
+	_add_skull(Vector3(38.2, -8.3, 94), -0.4)
 	# Skulls on stakes flanking the path to the mouth, facing arrivals.
 	for sx: float in [42.0, 44.2]:
 		_add_cylinder(Vector3(sx, 0.8, 41.6), 0.06, 0.08, 1.6, TRUNK_BROWN, false)
 		_add_skull(Vector3(sx, 1.8, 41.6), 0.0)
 	_add_sign(Vector3(46.8, 0, 40.6), "BEWARE: GOBLINS")
 
-	# Torches so the interior rooms and halls aren't pitch black.
-	_add_torch(Vector3(42.7, 1.9, 48))    # warren
-	_add_torch(Vector3(47.4, 1.8, 50))    # hall 1
-	_add_torch(Vector3(54.9, 1.8, 45.2))  # hall 2
-	_add_torch(Vector3(51, 2.4, 45.2))    # loot room
+	# Torches: rooms plus every hall landing, so the long dark descent always
+	# has the next light visible ahead.
+	_add_torch(Vector3(42.7, 1.9, 48))        # warren
+	_add_torch(Vector3(42.75, 1.9, 55.5))     # hall 1 landings...
+	_add_torch(Vector3(46.5, 1.9, 61))
+	_add_torch(Vector3(46.5, -0.5, 67.5))
+	_add_torch(Vector3(42.2, -1.6, 67.5))
+	_add_torch(Vector3(40, -2.4, 77))         # chamber (campfire lights the middle)
+	_add_torch(Vector3(44.4, -4, 87.3))       # hall 2 landings...
+	_add_torch(Vector3(39.4, -5, 87.3))
+	_add_torch(Vector3(39.4, -6.1, 95.25))    # loot room
 
 	# The treasure: a chest and a spill of gold. Not lootable (yet) -- it's
 	# set dressing for the goblins to guard once they move in.
 	# Chest against the far wall so it doesn't block the doorway.
-	_add_box(Vector3(49.9, 0.35, 44.6), Vector3(1.0, 0.7, 0.7), CHEST_BROWN)
-	_add_box(Vector3(49.9, 0.78, 44.6), Vector3(1.06, 0.16, 0.76), Color(0.3, 0.18, 0.08, 1), false)
-	_add_sphere(Vector3(49.9, 0.95, 44.6), 0.12, GOLD, false)
-	_add_cylinder(Vector3(51.4, 0.06, 43.4), 0.6, 0.6, 0.12, GOLD, false)
-	_add_cylinder(Vector3(51.1, 0.18, 43.8), 0.4, 0.4, 0.12, GOLD, false)
-	_add_cylinder(Vector3(51.8, 0.28, 43.1), 0.25, 0.25, 0.12, GOLD, false)
-	_add_box(Vector3(52.4, 0.15, 43.3), Vector3(0.5, 0.3, 0.3), GOLD, false)
-	_add_box(Vector3(50.4, 0.1, 42.7), Vector3(0.4, 0.2, 0.25), GOLD, false)
+	_add_box(Vector3(39.4, -8.15, 96.6), Vector3(1.0, 0.7, 0.7), CHEST_BROWN)
+	_add_box(Vector3(39.4, -7.72, 96.6), Vector3(1.06, 0.16, 0.76), Color(0.3, 0.18, 0.08, 1), false)
+	_add_sphere(Vector3(39.4, -7.55, 96.6), 0.12, GOLD, false)
+	_add_cylinder(Vector3(40.4, -8.44, 95.2), 0.6, 0.6, 0.12, GOLD, false)
+	_add_cylinder(Vector3(40.1, -8.32, 95.6), 0.4, 0.4, 0.12, GOLD, false)
+	_add_cylinder(Vector3(40.8, -8.22, 94.9), 0.25, 0.25, 0.12, GOLD, false)
+	_add_box(Vector3(38.6, -8.35, 94.7), Vector3(0.5, 0.3, 0.3), GOLD, false)
+	_add_box(Vector3(38.4, -8.4, 95.9), Vector3(0.4, 0.2, 0.25), GOLD, false)
+
+
+## Builds a fully enclosed corridor (HALL_W x HALL_H) along an axis-aligned 3D
+## centerline: ramped-or-flat floors and roofs per straight, side walls tall
+## enough to cover each straight's whole slope, and at every interior vertex a
+## flat landing (floor, roof, and walls on whichever of its sides aren't
+## openings). Each straight must change only x or only z -- y is free, that's
+## the slope. The chain's two ends are left open as doorways; the rooms' own
+## walls frame them. Landing walls sit 2cm proud of the segment walls' planes
+## so overlapping coplanar faces don't z-fight.
+func _add_corridor(points: Array) -> void:
+	var hw := HALL_W * 0.5
+	var wt := 1.0
+	var axes: Array[Vector3] = [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]
+	for i in range(points.size() - 1):
+		var a: Vector3 = points[i]
+		var b: Vector3 = points[i + 1]
+		var dir := Vector3(b.x - a.x, 0, b.z - a.z).normalized()
+		# Straights stop hw short of interior vertices (the landing covers the
+		# rest). Chain ends get a short FLAT pad through the doorway before any
+		# slope starts: if the ramp began sloping inside the doorway channel,
+		# the room floor's edge would sit proud of it as a small ledge -- a
+		# step the capsule walks down but reads as a wall when climbing back
+		# out (anything much over 0.1m breaks the 45-degree floor limit).
+		var fa := a + dir * (hw if i > 0 else 0.9)
+		var fb := b - dir * (hw if i < points.size() - 2 else 0.9)
+		fa.y = a.y
+		fb.y = b.y
+		if i == 0:
+			_add_box(Vector3(a.x, a.y - 0.125, a.z) + dir * 0.275, _along(dir, 1.25, 0.25, HALL_W), CAVE_FLOOR)
+			_add_box(Vector3(a.x, a.y + HALL_H - 0.125, a.z) + dir * 0.275, _along(dir, 1.25, 0.25, HALL_W + 0.4), CAVE_ROCK)
+		if i == points.size() - 2:
+			_add_box(Vector3(b.x, b.y - 0.125, b.z) - dir * 0.275, _along(dir, 1.25, 0.25, HALL_W), CAVE_FLOOR)
+			_add_box(Vector3(b.x, b.y + HALL_H - 0.125, b.z) - dir * 0.275, _along(dir, 1.25, 0.25, HALL_W + 0.4), CAVE_ROCK)
+		_add_ramp(fa, fb, HALL_W, CAVE_FLOOR)
+		_add_ramp(fa + Vector3.UP * HALL_H, fb + Vector3.UP * HALL_H, HALL_W + 0.4, CAVE_ROCK)
+		var side := Vector3(dir.z, 0, -dir.x)
+		var y_lo := minf(a.y, b.y) - 0.5
+		var y_hi := maxf(a.y, b.y) + HALL_H + 0.6
+		var mid := (fa + fb) * 0.5
+		var run := Vector2(fb.x - fa.x, fb.z - fa.z).length()
+		for s: float in [-1.0, 1.0]:
+			var c := mid + side * (s * (hw + wt * 0.5))
+			var size := Vector3(run, y_hi - y_lo, wt) if absf(dir.x) > 0.5 else Vector3(wt, y_hi - y_lo, run)
+			_add_box(Vector3(c.x, (y_lo + y_hi) * 0.5, c.z), size, CAVE_ROCK)
+	for i in range(1, points.size() - 1):
+		var v: Vector3 = points[i]
+		var d_in := Vector3(v.x - points[i - 1].x, 0, v.z - points[i - 1].z).normalized()
+		var d_out := Vector3(points[i + 1].x - v.x, 0, points[i + 1].z - v.z).normalized()
+		_add_box(Vector3(v.x, v.y - 0.125, v.z), Vector3(HALL_W, 0.25, HALL_W), CAVE_FLOOR)
+		_add_box(Vector3(v.x, v.y + HALL_H - 0.125, v.z), Vector3(HALL_W + 0.4, 0.25, HALL_W + 0.4), CAVE_ROCK)
+		for axis in axes:
+			if axis.is_equal_approx(-d_in) or axis.is_equal_approx(d_out):
+				continue # the openings to the previous/next straight
+			var c := Vector3(v.x, 0, v.z) + axis * (hw + wt * 0.5 + 0.02)
+			var size := Vector3(wt, HALL_H + 1.1, HALL_W + 2.0 * wt) if absf(axis.x) > 0.5 else Vector3(HALL_W + 2.0 * wt, HALL_H + 1.1, wt)
+			_add_box(Vector3(c.x, v.y + (HALL_H + 1.1) * 0.5 - 0.5, c.z), size, CAVE_ROCK)
+
+
+## A box size whose long dimension runs along the (axis-aligned) direction.
+func _along(dir: Vector3, length: float, height: float, width: float) -> Vector3:
+	return Vector3(length, height, width) if absf(dir.x) > 0.5 else Vector3(width, height, length)
 
 
 ## A skull: sphere cranium, box jaw, two dark eye sockets. Faces -z at yaw 0.
@@ -679,15 +771,16 @@ func _add_skull(pos: Vector3, yaw: float = 0.0) -> void:
 
 
 ## Ring of stones, crossed logs, an emissive flame cone, and a warm light.
-func _add_campfire(x: float, z: float) -> void:
+## `y` is the floor height the fire sits on (rooms below grade pass theirs).
+func _add_campfire(x: float, z: float, y: float = 0.0) -> void:
 	for k in range(7):
 		var a := TAU * float(k) / 7.0
-		_add_sphere(Vector3(x + cos(a) * 0.8, 0.14, z + sin(a) * 0.8), 0.2, STONE_GRAY, false)
-	_add_box(Vector3(x, 0.12, z), Vector3(1.1, 0.15, 0.15), Color(0.2, 0.12, 0.08, 1), false)
-	_add_box(Vector3(x, 0.12, z), Vector3(0.15, 0.15, 1.1), Color(0.2, 0.12, 0.08, 1), false)
-	_add_cylinder(Vector3(x, 0.5, z), 0.03, 0.38, 0.85, Color(1, 0.55, 0.15, 1), false, true)
+		_add_sphere(Vector3(x + cos(a) * 0.8, y + 0.14, z + sin(a) * 0.8), 0.2, STONE_GRAY, false)
+	_add_box(Vector3(x, y + 0.12, z), Vector3(1.1, 0.15, 0.15), Color(0.2, 0.12, 0.08, 1), false)
+	_add_box(Vector3(x, y + 0.12, z), Vector3(0.15, 0.15, 1.1), Color(0.2, 0.12, 0.08, 1), false)
+	_add_cylinder(Vector3(x, y + 0.5, z), 0.03, 0.38, 0.85, Color(1, 0.55, 0.15, 1), false, true)
 	var light := OmniLight3D.new()
-	light.position = Vector3(x, 1.3, z)
+	light.position = Vector3(x, y + 1.3, z)
 	light.light_color = TORCH_COLOR
 	light.light_energy = 1.8
 	light.omni_range = 11.0
