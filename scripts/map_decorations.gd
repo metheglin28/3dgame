@@ -318,17 +318,21 @@ func _add_collision_box(pos: Vector3, size: Vector3) -> void:
 	body.add_child(col)
 
 
-## Visual-only slab (no collision) -- used for tunnel ceilings, rendered from
-## both sides since the player is always underneath looking up at it.
+## Visual-only tunnel ceiling (no collision): a single plane facing straight
+## DOWN. The player is always underneath looking up, so a downward face is all
+## that's ever needed -- and crucially, a third-person camera that rises up
+## through the ceiling sees the culled (invisible) back face instead of the
+## slab's underside filling the whole screen. A double-sided slab here used to
+## blind the camera and hide the player whenever it clipped through. `size.y`
+## (the old slab thickness) is ignored now; x/z give the plane extent.
 func _add_visual_slab(pos: Vector3, size: Vector3, color: Color) -> void:
 	var mesh := MeshInstance3D.new()
 	mesh.position = pos
-	var box := BoxMesh.new()
-	box.size = size
-	mesh.mesh = box
-	var mat := _make_material(color)
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material_override = mat
+	mesh.rotation.x = PI # flip PlaneMesh's default +Y normal to point down
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(size.x, size.z)
+	mesh.mesh = plane
+	mesh.material_override = _make_material(color) # default CULL_BACK
 	add_child(mesh)
 
 
@@ -840,15 +844,18 @@ func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
 	# biome-tinted collar standing proud of the surface for a bit of rim detail.
 	var shaft_top := 0.15
 	var shaft_height := shaft_top - LEVEL_A_Y
-	_add_ring(Vector3(pos.x, shaft_top - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK)
-	_add_ring(Vector3(pos.x, 0.3, pos.y), SHAFT_RADIUS + 0.25, 0.6, biome_color)
+	# Shaft wall: viewed only from inside the shaft (dropping in / climbing out),
+	# so render the inner face only -- a camera clipping out through it sees nothing.
+	_add_ring(Vector3(pos.x, shaft_top - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK, BaseMaterial3D.CULL_FRONT)
+	# Collar: a rim ring viewed from outside on the surface, so outer face only.
+	_add_ring(Vector3(pos.x, 0.3, pos.y), SHAFT_RADIUS + 0.25, 0.6, biome_color, BaseMaterial3D.CULL_BACK)
 	_add_sign(Vector3(pos.x + SHAFT_RADIUS + 1.5, 0, pos.y), "MIND THE GAP")
 
 
 func _build_connector_shaft(pos: Vector2) -> void:
 	_build_switchback_ramp(pos, LEVEL_B_Y, LEVEL_A_Y)
 	var shaft_height := LEVEL_A_Y - LEVEL_B_Y
-	_add_ring(Vector3(pos.x, LEVEL_A_Y - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK)
+	_add_ring(Vector3(pos.x, LEVEL_A_Y - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK, BaseMaterial3D.CULL_FRONT)
 	_add_torch(Vector3(pos.x + 1.2, LEVEL_A_Y - 2.0, pos.y))
 	_add_torch(Vector3(pos.x - 1.2, LEVEL_B_Y + 2.5, pos.y))
 
@@ -893,7 +900,13 @@ func _build_switchback_ramp(center: Vector2, y_bottom: float, y_top: float) -> v
 		_add_box(Vector3(center.x + dir * end_x, y0 + rise - 0.125, center.y), Vector3(LANDING_LEN, 0.25, (RAMP_LANE_OFFSET + RAMP_WIDTH * 0.5) * 2.0), STONE_GRAY)
 
 
-func _add_ring(pos: Vector3, radius: float, height: float, color: Color) -> void:
+## Open-ended tube. `cull` picks which single side renders (CylinderMesh
+## normals point outward): CULL_BACK shows only the OUTER face, CULL_FRONT
+## only the INNER face, CULL_DISABLED both. Single-siding matters here because
+## these are thin and a third-person camera clips through them -- rendering
+## only the side you actually view from means a clipped camera sees the culled
+## (invisible) far side instead of a wall of color blinding it.
+func _add_ring(pos: Vector3, radius: float, height: float, color: Color, cull: int = BaseMaterial3D.CULL_DISABLED) -> void:
 	var mesh := MeshInstance3D.new()
 	mesh.position = pos
 	var cyl := CylinderMesh.new()
@@ -905,6 +918,6 @@ func _add_ring(pos: Vector3, radius: float, height: float, color: Color) -> void
 	cyl.cap_bottom = false
 	mesh.mesh = cyl
 	var mat := _make_material(color)
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.cull_mode = cull
 	mesh.material_override = mat
 	add_child(mesh)

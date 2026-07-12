@@ -100,7 +100,11 @@ same ranges the sliders allow.
   the upper and lower levels the same way. The maze layout is baked as a
   literal grid (no runtime randomness) generated once offline to guarantee
   every room has at least two connections — no dead ends, always another way
-  through — and lit with scattered torches so it's never pitch black.
+  through — and lit with scattered torches so it's never pitch black. The
+  third-person camera sweeps a small sphere so it pulls in against walls
+  instead of clipping through them, and the thin shaft/ceiling meshes are
+  single-sided so the camera never gets blinded by one filling the screen
+  underground.
 
 ## Project layout
 
