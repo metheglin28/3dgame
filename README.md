@@ -71,7 +71,7 @@ same ranges the sliders allow.
   the sword *or* the snowball hat, not both — each one replaces the other.
 - **A goblin cave** in the forest's NE corner: a rocky mouth with skull
   stakes that burrows due north in one straight line of rooms, descending
-  as it goes — entry tunnel and low goblin warren at the surface, a long
+  as it goes — entry tunnel and goblin warren at the surface, a long
   torch-lit snaking hall ramping down to the campfire-lit main chamber
   (~4.5m down, tall enough for a troll), then another long hall down to the
   treasure room at ~8.5m below the surface (chest and gold — set dressing
@@ -79,8 +79,8 @@ same ranges the sliders allow.
   through a gap in the perimeter wall (sealed by the cave itself), into
   space a future map expansion will fill in. **Six goblins** live along the
   line (plus a lookout outside) — small, pointy-eared, in assorted greens
-  from yellowish to dark moss. They wander their own rooms and mouth off if
-  you bother them. A troll is still planned.
+  from yellowish to dark moss, no name tags, no chit-chat: they just skulk
+  around their rooms (and get ragdolled). A troll is still planned.
 - **Ragdoll combat** — nobody has health and nobody dies: getting hit just
   cuts your controls and launches you tumbling end over end until you land,
   skid out, and get back up. The sword ragdolls goblins, villagers, and
