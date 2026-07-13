@@ -65,6 +65,25 @@ var wearing_cowboy_hat: bool = false:
 var _shoot_cooldown: float = 0.0
 const SHOOT_COOLDOWN := 0.55
 
+## Bunny-ears power, granted at the goblin cave's treasure chest (see
+## chest.gd). While worn, your base jump is 1.5x, and every consecutive
+## bounce (re-jumping the instant you land) stacks another BOUNCE_STEP on top,
+## higher and higher with no cap. Miss the rhythm -- land and dawdle past
+## BOUNCE_WINDOW without jumping -- and the streak drops back to the 1.5x base.
+var wearing_bunny_ears: bool = false:
+	set(value):
+		wearing_bunny_ears = value
+		if bunny_ears:
+			bunny_ears.visible = value
+		if not value:
+			_bounce_mult = 1.0
+const BUNNY_JUMP_BASE := 1.2247 # = sqrt(1.5): a 1.5x jump HEIGHT (height goes as velocity^2)
+const BOUNCE_STEP := 1.12      # each in-rhythm bounce multiplies jump by this
+const BOUNCE_WINDOW := 0.25    # re-jump within this long of landing to keep the streak
+var _bounce_mult: float = 1.0  # server-side; grows per consecutive bounce
+var _time_since_land: float = 0.0
+var _was_on_floor: bool = false
+
 # Server-side swing rate limit; also drives the swing animation duration.
 var _swing_cooldown: float = 0.0
 const SWING_COOLDOWN := 0.5
@@ -137,6 +156,7 @@ const NET_SNAP_DISTANCE := 4.0
 @onready var sword: Node3D = $Mesh/SwordPivot
 @onready var cowboy_hat: Node3D = $Mesh/CowboyHat
 @onready var revolver: Node3D = $Mesh/RevolverPivot
+@onready var bunny_ears: Node3D = $Mesh/BunnyEars
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
 @onready var options_button: Button = $HUD/OptionsButton
@@ -294,6 +314,12 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
 
+	# Track how long we've been grounded, for the bunny-ears bounce rhythm:
+	# 0 the instant we land, growing while we stand around.
+	if is_on_floor():
+		_time_since_land = 0.0 if not _was_on_floor else _time_since_land + delta
+	_was_on_floor = is_on_floor()
+
 	if ragdolled:
 		# No control while flying: gravity and momentum only, tumbling all the
 		# way, then skid out and stand back up.
@@ -312,9 +338,18 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
-		velocity.y = JUMP_VELOCITY * _jump_mult
+		var jump_v := JUMP_VELOCITY * _jump_mult
+		if wearing_bunny_ears:
+			# Bounce in rhythm (jump again within BOUNCE_WINDOW of landing) and
+			# the streak grows; land and dawdle and it resets to the 1.5x base.
+			if _time_since_land <= BOUNCE_WINDOW:
+				_bounce_mult *= BOUNCE_STEP
+			else:
+				_bounce_mult = 1.0
+			jump_v = JUMP_VELOCITY * _jump_mult * BUNNY_JUMP_BASE * _bounce_mult
 		_jump_buffer_timer = 0.0
 		_coyote_timer = 0.0
+		velocity.y = jump_v
 
 	var speed := SPEED * SPRINT_MULTIPLIER if _pending_sprint else SPEED
 	# Wading: shallow water is charming, but it is not fast.
@@ -521,6 +556,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	wearing_hat = state["hat"]
 	wearing_helmet = state["helmet"]
 	wearing_cowboy_hat = state["cowboy"]
+	wearing_bunny_ears = state["bunny"]
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
 

@@ -74,9 +74,14 @@ same ranges the sliders allow.
 - **A coat rack** deep in the canyon maze (next to Dave, who denies
   everything) with a cowboy hat on it — take it to don the hat and a
   revolver; click to fire a small, very fast bullet that ragdolls whatever
-  it hits with the hardest knockback in the game. You can hold only one
-  power at a time — snowball hat, sword, or revolver; each one replaces
-  the others.
+  it hits with the hardest knockback in the game.
+- **The goblin cave's treasure chest** (at the end of the descending line,
+  past the goblins) — open it to don a bunny-ear headband. While worn your
+  base jump is 1.5x higher, and every consecutive bounce (re-jump the
+  instant you land) stacks higher and higher with no cap; miss the rhythm
+  and you drop back to the 1.5x base. You can hold only one power at a
+  time — snowball hat, sword, revolver, or bunny ears; each replaces the
+  others.
 - **A goblin cave** in the forest's NE corner: a rocky mouth with skull
   stakes that burrows due north in one straight line of rooms, descending
   as it goes — entry tunnel and goblin warren at the surface, a long

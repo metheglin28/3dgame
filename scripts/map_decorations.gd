@@ -21,6 +21,7 @@ const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
 const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
 const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
 const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
+const CHEST_SCENE := preload("res://scenes/chest.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -789,6 +790,11 @@ func _build_cave() -> void:
 	# set dressing for the goblins to guard once they move in.
 	# Chest against the far wall so it doesn't block the doorway.
 	_add_box(Vector3(39.4, -8.15, 96.6), Vector3(1.0, 0.7, 0.7), CHEST_BROWN)
+	# Invisible interact volume over the chest -- the reward, grants the bunny
+	# ears (see chest.gd). The chest's look above is deliberately unchanged.
+	var chest := CHEST_SCENE.instantiate()
+	chest.position = Vector3(39.4, -8.5, 96.6)
+	add_child(chest)
 	_add_box(Vector3(39.4, -7.72, 96.6), Vector3(1.06, 0.16, 0.76), Color(0.3, 0.18, 0.08, 1), false)
 	_add_sphere(Vector3(39.4, -7.55, 96.6), 0.12, GOLD, false)
 	_add_cylinder(Vector3(40.4, -8.44, 95.2), 0.6, 0.6, 0.12, GOLD, false)

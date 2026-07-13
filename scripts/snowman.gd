@@ -14,6 +14,7 @@ func on_interact(by: Node3D) -> void:
 		# so a click always unambiguously means one thing.
 		by.wearing_helmet = false
 		by.wearing_cowboy_hat = false
+		by.wearing_bunny_ears = false
 
 
 func get_interact_prompt() -> String:
