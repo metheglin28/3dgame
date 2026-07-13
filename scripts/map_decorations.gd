@@ -169,17 +169,31 @@ const LEVEL_B_ROWS: Array[String] = [
 	"#.#.#.#.#.#.#.#",
 ]
 
-## World-space (x, z) of each entrance/connector, snapped exactly onto a
-## Level A room center so the shaft drops into open floor, not a pillar.
+## World-space (x, z) of each underground entrance's MOUTH -- the Level A room
+## center the ramp bottoms out into. From there a single straight ramp climbs
+## in `dir` to a flat landing just below the surface, and a hole above the
+## landing drops you the last ~1.1m in (and lets you jump back out). Kept on a
+## room center so the mouth joins open tunnel floor.
 const ENTRANCE_SHAFTS := {
 	"forest": Vector2(30, 40),
 	"farm": Vector2(-30, 40),
 	"canyon": Vector2(20, -20),
 	"snow": Vector2(-30, -30),
 }
-## Vertical shafts linking Level A down to Level B. Each is also a valid room
-## center in both grids (checked when the layout was authored).
-const CONNECTOR_SHAFTS: Array[Vector2] = [Vector2(0, 0), Vector2(-20, -20), Vector2(20, 20)]
+## Direction each ramp climbs from its mouth toward the surface. Chosen along
+## an already-open Level A corridor so the ramp channel needs no carving.
+const ENTRANCE_DIRS := {
+	"forest": Vector2(0, 1),
+	"farm": Vector2(0, -1),  # away from the duck pond, which sits just north of the mouth
+	"canyon": Vector2(0, -1),
+	"snow": Vector2(0, -1),
+}
+const ENTRANCE_RUN := 7.0       # ramp horizontal run (4.9m rise -> ~35 deg)
+const ENTRANCE_LAND_LEN := 4.0  # the flat landing you drop onto, at the top
+const ENTRANCE_LAND_Y := -1.1   # ~1.1m below grade: a jumpable drop, in and out
+const ENTRANCE_HALF_W := 3.0    # open-trench half-width
+# The Level A <-> Level B connector shafts were removed; Level B (the gem
+# caverns) is sealed for now, until its access is redesigned.
 
 
 func _ready() -> void:
@@ -458,6 +472,45 @@ func _rects_minus_holes(rects: Array, holes: Array, half: float) -> Array:
 	return result
 
 
+## Like _rects_minus_holes but subtracts an arbitrary Rect2 (not a square
+## around a point) -- used to cut the entrance trenches out of the ground and
+## the tunnel ceiling.
+func _rects_minus_rect(rects: Array, hr: Rect2) -> Array:
+	var out: Array = []
+	for r in rects:
+		var rect: Rect2 = r
+		var ix0 := maxf(rect.position.x, hr.position.x)
+		var iz0 := maxf(rect.position.y, hr.position.y)
+		var ix1 := minf(rect.end.x, hr.end.x)
+		var iz1 := minf(rect.end.y, hr.end.y)
+		if ix0 >= ix1 or iz0 >= iz1:
+			out.append(rect)
+			continue
+		if iz0 > rect.position.y:
+			out.append(Rect2(rect.position, Vector2(rect.size.x, iz0 - rect.position.y)))
+		if iz1 < rect.end.y:
+			out.append(Rect2(Vector2(rect.position.x, iz1), Vector2(rect.size.x, rect.end.y - iz1)))
+		if ix0 > rect.position.x:
+			out.append(Rect2(Vector2(rect.position.x, iz0), Vector2(ix0 - rect.position.x, iz1 - iz0)))
+		if ix1 < rect.end.x:
+			out.append(Rect2(Vector2(ix1, iz0), Vector2(rect.end.x - ix1, iz1 - iz0)))
+	return out
+
+
+## Footprint of an entrance's open trench: from the mouth cell's edge out to
+## the back of the landing, ENTRANCE_HALF_W to each side. Both the ground
+## surface (collision + visual) and the tunnel ceiling get this cut out.
+func _entrance_trench(biome: String) -> Rect2:
+	var m: Vector2 = ENTRANCE_SHAFTS[biome]
+	var d: Vector2 = ENTRANCE_DIRS[biome]
+	var lo := m + d * 2.5
+	var hi := m + d * (2.5 + ENTRANCE_RUN + ENTRANCE_LAND_LEN)
+	var perp := Vector2(absf(d.y), absf(d.x)) * ENTRANCE_HALF_W
+	var a := Vector2(minf(lo.x, hi.x), minf(lo.y, hi.y)) - perp
+	var b := Vector2(maxf(lo.x, hi.x), maxf(lo.y, hi.y)) + perp
+	return Rect2(a, b - a)
+
+
 # --- world edge ---------------------------------------------------------------
 
 func _build_perimeter_walls() -> void:
@@ -473,20 +526,34 @@ func _build_perimeter_walls() -> void:
 
 
 func _build_quadrant_ground() -> void:
-	# The base grass sheet (previously a single 120x120 plane in world.tscn)
-	# is tiled here AROUND the duck pond's hole -- an uncut plane would roof
-	# the sunken basin and hide the water. Same for the farm's color wash.
-	for r in _rects_minus_holes([Rect2(Vector2(-MAP_HALF, -MAP_HALF), Vector2(MAP_HALF * 2.0, MAP_HALF * 2.0))], [POND_CENTER], POND_HALF):
+	# Every ground plane is tiled AROUND the holes that open into things below
+	# it -- the four entrance trenches and the duck pond -- since an uncut plane
+	# would just roof them over. The base grass sheet (previously a single
+	# 120x120 plane in world.tscn) plus each quadrant's color wash.
+	var cuts := _ground_cuts()
+	_emit_ground(Rect2(Vector2(-MAP_HALF, -MAP_HALF), Vector2(MAP_HALF * 2.0, MAP_HALF * 2.0)), 0.0, GRASS_GREEN, cuts)
+	_emit_ground(Rect2(Vector2(12, 12), Vector2(46, 46)), 0.01, FOREST_FLOOR, cuts)
+	_emit_ground(Rect2(Vector2(-58, 12), Vector2(46, 46)), 0.01, FARM_FIELD, cuts)
+	_emit_ground(Rect2(Vector2(12, -58), Vector2(46, 46)), 0.01, CANYON_FLOOR, cuts)
+	_emit_ground(Rect2(Vector2(-58, -58), Vector2(46, 46)), 0.01, SNOW_WHITE, cuts)
+
+
+## The surface holes every ground plane must dodge: entrance trenches + pond.
+func _ground_cuts() -> Array:
+	var cuts: Array = []
+	for biome in ENTRANCE_SHAFTS:
+		cuts.append(_entrance_trench(biome))
+	cuts.append(Rect2(POND_CENTER - Vector2(POND_HALF, POND_HALF), Vector2(POND_HALF * 2.0, POND_HALF * 2.0)))
+	return cuts
+
+
+func _emit_ground(area: Rect2, y: float, color: Color, cuts: Array) -> void:
+	var rects: Array = [area]
+	for c in cuts:
+		rects = _rects_minus_rect(rects, c)
+	for r in rects:
 		var rect: Rect2 = r
-		_add_ground_patch(Vector3(rect.position.x + rect.size.x * 0.5, 0.0, rect.position.y + rect.size.y * 0.5), rect.size, GRASS_GREEN)
-	# Flat color washes so each quadrant reads at a glance; lifted slightly
-	# above the base ground sheet to avoid z-fighting.
-	_add_ground_patch(Vector3(35, 0.01, 35), Vector2(46, 46), FOREST_FLOOR)
-	for r in _rects_minus_holes([Rect2(Vector2(-58, 12), Vector2(46, 46))], [POND_CENTER], POND_HALF):
-		var rect: Rect2 = r
-		_add_ground_patch(Vector3(rect.position.x + rect.size.x * 0.5, 0.01, rect.position.y + rect.size.y * 0.5), rect.size, FARM_FIELD)
-	_add_ground_patch(Vector3(35, 0.01, -35), Vector2(46, 46), CANYON_FLOOR)
-	_add_ground_patch(Vector3(-35, 0.01, -35), Vector2(46, 46), SNOW_WHITE)
+		_add_ground_patch(Vector3(rect.position.x + rect.size.x * 0.5, y, rect.position.y + rect.size.y * 0.5), rect.size, color)
 
 
 # --- center: town --------------------------------------------------------------
@@ -1077,12 +1144,11 @@ func _build_snowy_hills() -> void:
 
 func _build_ground_collision() -> void:
 	var half := MAP_HALF
-	var whole: Array = [Rect2(Vector2(-half, -half), Vector2(half * 2.0, half * 2.0))]
-	var holes: Array = ENTRANCE_SHAFTS.values()
-	var rects := _rects_minus_holes(whole, holes, SHAFT_RADIUS + 0.15)
-	# The duck pond's basin needs its own hole (its shores and floor supply
-	# the collision inside it).
-	rects = _rects_minus_holes(rects, [POND_CENTER], POND_HALF)
+	var rects: Array = [Rect2(Vector2(-half, -half), Vector2(half * 2.0, half * 2.0))]
+	# Same holes the ground VISUAL dodges (entrance trenches + pond) so you can
+	# actually fall into them, not just see into them.
+	for c in _ground_cuts():
+		rects = _rects_minus_rect(rects, c)
 	for r in rects:
 		var rect: Rect2 = r
 		var cx := rect.position.x + rect.size.x * 0.5
@@ -1093,23 +1159,25 @@ func _build_ground_collision() -> void:
 # --- underground: tunnel network -----------------------------------------------
 
 func _build_tunnels() -> void:
-	# Level A's floor gets holes where the connector shafts drop to Level B;
-	# Level B is the bottom, so its floor stays solid throughout. Level A is
-	# warm brown rock lit by torches; Level B is darker, grayer, and studded
-	# with glowing gems -- the deeper you go, the stranger it gets.
-	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, CONNECTOR_SHAFTS,
-		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL])
+	# Level A is warm brown rock lit by torches; Level B is darker, grayer, and
+	# studded with glowing gems. Level B is sealed for now (no connector shafts),
+	# so both floors stay solid. Level A's ceiling gets cut where each entrance
+	# ramp climbs up through it into an open trench.
+	var ceil_holes: Array = []
+	for biome in ENTRANCE_SHAFTS:
+		ceil_holes.append(_entrance_trench(biome))
+	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, [],
+		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL], ceil_holes)
 	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [],
 		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true)
 
 	for biome in ENTRANCE_SHAFTS:
-		_build_entrance_shaft(ENTRANCE_SHAFTS[biome], biome)
-	for pos in CONNECTOR_SHAFTS:
-		_build_connector_shaft(pos)
+		_build_entrance(biome)
 
 
 func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array,
-		rock: Color, floor_color: Color, ceiling_color: Color, gems: bool, skip_cells: Array = []) -> void:
+		rock: Color, floor_color: Color, ceiling_color: Color, gems: bool, skip_cells: Array = [],
+		ceiling_holes: Array = []) -> void:
 	var cols := rows[0].length()
 	var grid_rows := rows.size()
 	var width := cols * TUNNEL_CELL
@@ -1129,10 +1197,15 @@ func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_h
 		var cz := rect.position.y + rect.size.y * 0.5
 		_add_box(Vector3(cx, y - 0.15, cz), Vector3(rect.size.x, 0.3, rect.size.y), floor_color)
 
-	# Ceiling is purely atmospheric: nobody can jump anywhere near 4m, so it
-	# never needs collision or holes, just something other than open sky
-	# overhead when you look up.
-	_add_visual_slab(Vector3(origin.x + width * 0.5, y + TUNNEL_WALL_HEIGHT, origin.y + depth * 0.5), Vector3(width, 0.3, depth), ceiling_color)
+	# Ceiling is purely atmospheric (nobody jumps near 4m), so it needs no
+	# collision -- but it IS tiled around the entrance trenches, where the ramps
+	# climb up through it to open sky.
+	var ceil_rects: Array = [Rect2(origin, Vector2(width, depth))]
+	for h in ceiling_holes:
+		ceil_rects = _rects_minus_rect(ceil_rects, h)
+	for r in ceil_rects:
+		var rect: Rect2 = r
+		_add_visual_slab(Vector3(rect.position.x + rect.size.x * 0.5, y + TUNNEL_WALL_HEIGHT, rect.position.y + rect.size.y * 0.5), Vector3(rect.size.x, 0.3, rect.size.y), ceiling_color)
 
 	for gy in range(grid_rows):
 		var row: String = rows[gy]
@@ -1234,71 +1307,33 @@ func _add_gem_cluster(floor_pos: Vector3, color: Color, rng: RandomNumberGenerat
 	add_child(light)
 
 
-func _build_entrance_shaft(pos: Vector2, biome: String) -> void:
-	_build_switchback_ramp(pos, LEVEL_A_Y, 0.0)
-	var biome_color: Color = {
-		"forest": FOREST_CANOPY, "farm": BARN_RED, "canyon": CANYON_ROCK, "snow": Color(0.5, 0.72, 0.85, 1),
-	}[biome]
-	# The hole itself: an open-ended tube reaching all the way down to Level A's
-	# floor, so looking in actually shows depth (and the ramps inside)
-	# instead of a flat dark decal sitting on the grass. Plus a short
-	# biome-tinted collar standing proud of the surface for a bit of rim detail.
-	var shaft_top := 0.15
-	var shaft_height := shaft_top - LEVEL_A_Y
-	# Shaft wall: viewed only from inside the shaft (dropping in / climbing out),
-	# so render the inner face only -- a camera clipping out through it sees nothing.
-	_add_ring(Vector3(pos.x, shaft_top - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK, BaseMaterial3D.CULL_FRONT)
-	# Collar: a rim ring viewed from outside on the surface, so outer face only.
-	_add_ring(Vector3(pos.x, 0.3, pos.y), SHAFT_RADIUS + 0.25, 0.6, biome_color, BaseMaterial3D.CULL_BACK)
-	_add_sign(Vector3(pos.x + SHAFT_RADIUS + 1.5, 0, pos.y), "MIND THE GAP")
-
-
-func _build_connector_shaft(pos: Vector2) -> void:
-	_build_switchback_ramp(pos, LEVEL_B_Y, LEVEL_A_Y)
-	var shaft_height := LEVEL_A_Y - LEVEL_B_Y
-	_add_ring(Vector3(pos.x, LEVEL_A_Y - shaft_height * 0.5, pos.y), SHAFT_RADIUS, shaft_height, TUNNEL_ROCK, BaseMaterial3D.CULL_FRONT)
-	_add_torch(Vector3(pos.x + 1.2, LEVEL_A_Y - 2.0, pos.y))
-	_add_torch(Vector3(pos.x - 1.2, LEVEL_B_Y + 2.5, pos.y))
-
-
-## Straight switchback ramps up the inside of a vertical shaft: alternating
-## slopes with a flat landing at each turn, like a fire escape. The top
-## landing deliberately stops TOP_LANDING_DROP short of y_top (the level
-## you're climbing out onto), which is within normal jump height -- so "jump
-## out of" the hole is literally one jump from the last landing, and hopping
-## in lands you gently on that same landing. Everything below still works by
-## just falling.
-const RAMP_RUN := 2.2          # horizontal length of one slope (fits the shaft)
-const RAMP_WIDTH := 1.2
-# Lane separation matters more than lane width: consecutive slopes CONVERGE in
-# height toward the landing they share, so a slope is always passing directly
-# overhead of the previous one at less than head height near that end. The
-# lanes therefore need a gap wider than the player capsule (0.8) between their
-# edges, or climbers bonk into the underside of the next slope up.
-const RAMP_LANE_OFFSET := 1.1  # lane edges: 0.5..1.7 either side -> 1.0 gap
-const LANDING_LEN := 1.1
-const TOP_LANDING_DROP := 0.9  # rim height above the top landing; jump apex is ~1.17
-const MAX_SEGMENT_RISE := 1.6  # keeps every slope comfortably under 45 degrees
-
-func _build_switchback_ramp(center: Vector2, y_bottom: float, y_top: float) -> void:
-	var total_rise := (y_top - TOP_LANDING_DROP) - y_bottom
-	var segments := int(ceilf(total_rise / MAX_SEGMENT_RISE))
-	var rise := total_rise / segments
-	var end_x := RAMP_RUN * 0.5 + LANDING_LEN * 0.5
-	for i in range(segments):
-		var y0 := y_bottom + i * rise
-		# Even segments climb toward +x in the -z lane, odd ones back toward -x
-		# in the +z lane, so consecutive slopes sit side by side instead of
-		# stacked (headroom between same-lane slopes is two full rises).
-		var dir := 1.0 if i % 2 == 0 else -1.0
-		var lane_z := center.y + (-RAMP_LANE_OFFSET if i % 2 == 0 else RAMP_LANE_OFFSET)
-		_add_ramp(
-			Vector3(center.x - dir * RAMP_RUN * 0.5, y0, lane_z),
-			Vector3(center.x + dir * RAMP_RUN * 0.5, y0 + rise, lane_z),
-			RAMP_WIDTH, STONE_GRAY)
-		# Landing at this slope's top end, spanning both lanes so turning
-		# around is just walking across it.
-		_add_box(Vector3(center.x + dir * end_x, y0 + rise - 0.125, center.y), Vector3(LANDING_LEN, 0.25, (RAMP_LANE_OFFSET + RAMP_WIDTH * 0.5) * 2.0), STONE_GRAY)
+## An underground entrance/exit: an open trench cut down into the ground, with
+## a flat landing you drop ~1.1m onto (jumpable back out) and a single straight
+## ramp down from it to the Level A tunnel floor -- no switchbacks, no rails,
+## all the brown of the tunnel itself. The trench's surface + ceiling holes are
+## cut elsewhere (see _ground_cuts / _build_tunnels); this lays the floor, the
+## ramp, and short walls that hide the thin slab/ceiling void along the sides.
+func _build_entrance(biome: String) -> void:
+	var m: Vector2 = ENTRANCE_SHAFTS[biome]
+	var d := Vector3(ENTRANCE_DIRS[biome].x, 0, ENTRANCE_DIRS[biome].y)
+	var lat := Vector3(d.z, 0, d.x) # horizontal perpendicular
+	var w := ENTRANCE_HALF_W * 2.0 - 1.0 # ramp/landing a touch narrower than the trench
+	# The ramp: from the mouth-cell edge at tunnel-floor depth up to the landing.
+	var foot := Vector3(m.x, LEVEL_A_Y, m.y) + d * 2.5
+	var top := Vector3(m.x, ENTRANCE_LAND_Y, m.y) + d * (2.5 + ENTRANCE_RUN)
+	_add_ramp(foot, top, w, TUNNEL_FLOOR_COLOR)
+	# The flat landing you fall onto. Its front edge butts EXACTLY to the ramp's
+	# top (where the ramp surface reaches -1.1); overlapping it back over lower
+	# ramp would leave a small step you can walk down but not up (see corridors).
+	var lc := Vector3(m.x, ENTRANCE_LAND_Y - 0.15, m.y) + d * (2.5 + ENTRANCE_RUN + ENTRANCE_LAND_LEN * 0.5)
+	_add_box(lc, _along(d, ENTRANCE_LAND_LEN, 0.3, w), TUNNEL_FLOOR_COLOR)
+	# Short side walls (only the -2..0 band, where the ground slab and tunnel
+	# ceiling leave a thin void beside the open trench); below that it's tunnel.
+	for s: float in [-1.0, 1.0]:
+		var wc := Vector3(m.x, -1.0, m.y) + d * (2.5 + (ENTRANCE_RUN + ENTRANCE_LAND_LEN) * 0.5) + lat * (s * (ENTRANCE_HALF_W - 0.2))
+		_add_box(wc, _along(d, ENTRANCE_RUN + ENTRANCE_LAND_LEN + 0.5, 2.0, 0.4), TUNNEL_ROCK)
+	_add_torch(Vector3(foot.x, LEVEL_A_Y + 2.2, foot.z))
+	_add_sign(Vector3(m.x, 0, m.y) + d * (2.5 + ENTRANCE_RUN + ENTRANCE_LAND_LEN) + lat * (ENTRANCE_HALF_W + 1.2), "TO THE TUNNELS")
 
 
 ## Open-ended tube. `cull` picks which single side renders (CylinderMesh

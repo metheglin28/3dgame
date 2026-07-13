@@ -110,21 +110,15 @@ same ranges the sliders allow.
   and snowy hills with a snowman (SW). All layout lives in
   `scripts/map_decorations.gd` as literal coordinates — tweak numbers there
   to move things around.
-- **An underground tunnel network**, two levels deep, under the whole map.
-  Each quadrant has a circular entrance you drop into (walk over the dark
-  disc and gravity does the rest) and climb back out of via straight
-  switchback ramps — the top landing stops just short of the rim, one easy
-  jump from ground level in either direction. Three vertical shafts connect
-  the upper and lower levels the same way. The maze layout is baked as a
+- **An underground tunnel network** under the whole map. Each quadrant has
+  an entrance: an open trench where you drop a short, jumpable ~1.1m onto a
+  flat landing, then follow a single straight ramp down to the tunnel floor
+  (and back up + a hop to get out). The maze layout is baked as a
   literal grid (no runtime randomness) generated once offline to guarantee
   every room has at least two connections — no dead ends, always another way
-  through. The upper level is warm brown rock lit by torches; the lower
-  level is the **gem caverns** — darker, grayer rock studded with hundreds
-  of glowing crystals in seven colors (spikes, shards, and nodules poking
-  from every corridor wall, more hanging from room ceilings), lit by
-  floor-standing crystal clusters that each cast their own colored light.
-  Gem placement comes from a fixed seed, so like everything else on the
-  map it's identical every run and on every peer. The
+  through. It's warm brown rock lit by torches. (A second, deeper level —
+  the **gem caverns** — is built but sealed off for now; its connector
+  shafts were removed while the entrances get reworked.) The
   third-person camera sweeps a small sphere so it pulls in against walls
   instead of clipping through them, and the thin shaft/ceiling meshes are
   single-sided so the camera never gets blinded by one filling the screen
