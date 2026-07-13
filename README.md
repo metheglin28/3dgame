@@ -61,7 +61,9 @@ same ranges the sliders allow.
 - **Pickup props** (the red boxes) — walk up, press E to grab, click to throw them.
 - **A door with a lever** — press E on the lever to swing it open or shut.
 - **Three NPCs** who wander around and say a random one-liner each (with their
-  own personality/lines) when you talk to them. One of them is lost.
+  own personality/lines) when you talk to them. One of them is lost. Name
+  tags and speech bubbles (on NPCs and other players alike) fade in only when
+  you're close by, so you're not reading every name across the whole map.
 - **A snowman in the snowy hills** who'll grant you a snowball hat if you talk
   to him — while you're wearing it, click to lob snowballs instead of your
   hands staying empty. Talk to him again to take it off.

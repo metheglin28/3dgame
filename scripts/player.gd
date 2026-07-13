@@ -248,6 +248,11 @@ func _refresh_player_list() -> void:
 func _process(delta: float) -> void:
 	_smooth_to_net_state(delta)
 	_update_squash_stretch(delta)
+	# Fade this player's name tag by the local player's distance, same rule as
+	# NPC labels (see GameState) -- so you don't read everyone's name across the
+	# whole map. Runs for every player node; the local one sits at distance ~0
+	# and so stays fully visible.
+	name_label.modulate.a = GameState.label_alpha(global_position)
 	if peer_id != multiplayer.get_unique_id():
 		return
 	# Local-only "am I looking at something?" check purely for the UI prompt text;

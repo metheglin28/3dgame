@@ -37,6 +37,11 @@ const DEFAULT_LINES: Array[String] = [
 @onready var speech_label: Label3D = $SpeechLabel
 @onready var mesh: MeshInstance3D = $Mesh
 
+# Labels fade in only when the local player is near (see GameState). `_speaking`
+# gates the speech bubble on top of that; `_speech_rgb` preserves its tint.
+var _speaking := false
+var _speech_rgb := Color.WHITE
+
 var _home: Vector3
 var _target: Vector3
 var _pause_timer := 0.0
@@ -60,6 +65,7 @@ func _ready() -> void:
 	name_label.text = npc_name
 	if lines.is_empty():
 		lines = DEFAULT_LINES
+	_speech_rgb = speech_label.modulate
 	speech_label.visible = false
 	if multiplayer.is_server():
 		_home = global_position
@@ -154,9 +160,9 @@ func _pick_new_target() -> void:
 @rpc("authority", "call_local", "reliable")
 func _say(line: String) -> void:
 	speech_label.text = line
-	speech_label.visible = true
+	_speaking = true
 	await get_tree().create_timer(SPEECH_DURATION).timeout
-	speech_label.visible = false
+	_speaking = false
 
 
 func apply_remote_state(state: Dictionary) -> void:
@@ -168,6 +174,7 @@ func apply_remote_state(state: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_labels()
 	# Same snapshot smoothing as the player (see player.gd) -- NPCs otherwise
 	# visibly stutter on clients when unreliable snapshot packets bunch up.
 	if multiplayer.is_server() or not _has_net_state:
@@ -179,3 +186,16 @@ func _process(delta: float) -> void:
 	var w := 1.0 - exp(-NET_SMOOTH_RATE * delta)
 	global_position = global_position.lerp(_net_pos_target, w)
 	rotation.y = lerp_angle(rotation.y, _net_rot_target, w)
+
+
+## Fade the name tag (and speech bubble, when talking) by the local player's
+## distance. Runs on every peer, including the host -- hence before _process's
+## server early-return. Goblins keep their name label hidden (visible=false in
+## the scene), so this only ever pushes alpha on a node that's already hidden;
+## nothing reveals it.
+func _update_labels() -> void:
+	var a := GameState.label_alpha(global_position)
+	name_label.modulate.a = a
+	speech_label.visible = _speaking and a > 0.01
+	if speech_label.visible:
+		speech_label.modulate = Color(_speech_rgb.r, _speech_rgb.g, _speech_rgb.b, a)
