@@ -54,6 +54,16 @@ same ranges the sliders allow.
   the host tells them, which keeps things simple and consistent. If the host
   leaves or crashes, joined clients automatically drop back to the main menu
   instead of getting stuck.
+- **King of the Hill (party round)** — the hub doubles as an arena. Interact
+  with the crown on the table inside the town's south house to start a ~2.5 min
+  round: a glowing ring appears at one of a rotating set of spots (plaza, farm,
+  forest, snowy hills), and while you're its *sole* occupant you bank control
+  time (contested or empty = frozen). Most time held when the clock runs out
+  wins the round; a running scoreboard tracks wins for the session. You keep and
+  grab powers as normal during a round, so shoving the King off with a sword,
+  snowballs, or the revolver is the whole game. Built on a reusable
+  server-authoritative round controller (`GameDirector`) so more modes can slot
+  in later.
 - **A player character** you can walk and look around with in third person,
   with a landing squash animation and a "Players Online" list in the corner.
 - **An interaction system** — look at something interactable and a prompt

@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 NetworkManager="*res://scripts/autoload/network_manager.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 Settings="*res://scripts/autoload/settings.gd"
+GameDirector="*res://scripts/autoload/game_director.gd"
 
 [display]
 

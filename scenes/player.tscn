@@ -294,6 +294,19 @@ offset_bottom = 2.0
 mouse_filter = 2
 color = Color(1, 1, 1, 0.85)
 
+[node name="RoundLabel" type="Label" parent="HUD"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+offset_top = 12.0
+offset_right = 260.0
+offset_bottom = 120.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+text = ""
+
 [node name="LeaveButton" type="Button" parent="HUD"]
 anchors_preset = 1
 anchor_left = 1.0

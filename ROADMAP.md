@@ -60,30 +60,28 @@ from snapshots), **deterministic map** (no runtime randomness for layout),
       two-process (host + client) confirms both see the teleport cleanly.
 
 ### 0.2 Session scoreboard
-- [ ] Server-authoritative score store keyed by peer_id (new `GameDirector`
-      autoload, or alongside `NetworkManager.player_names`).
+- [x] Server-authoritative score store keyed by peer_id (`GameDirector`
+      autoload holds `session_wins` + per-round `control_time`).
 - [ ] `add_score(peer, n)` / `reset_scores()` API.
-- [ ] Sync scores to all clients (reliable RPC, or fold into the snapshot).
-- [ ] HUD scoreboard panel (toggle on a key, e.g., Tab; plus a compact
-      always-on corner tally). Lives in the player HUD `CanvasLayer`.
-- [ ] Round tally view (points earned this round) + session running total.
+- [x] Sync scores to all clients (folded into the World snapshot).
+- [x] HUD scoreboard panel (RoundLabel in the player HUD, driven by
+      GameDirector). *(Always-on text; a toggle/polish pass is Phase 2.)*
+- [x] Round tally view (control time this round) + session running total (wins).
 - [ ] Handle join/leave (add/remove rows; late joiner sees current totals).
 - [ ] **Test:** award points on the host; all peers show identical totals;
       a late-joining client receives the current scores.
 
 ### 0.3 Round controller (`GameDirector` state machine)
-- [ ] New server-owned director: states `HUB → COUNTDOWN → PLAYING →
-      ROUND_END → HUB`.
-- [ ] Server owns state; broadcast `{state, mode, timer, ...}` to clients
-      (reliable for transitions, snapshot/interval for the timer).
-- [ ] Round-start trigger (per Open Decisions).
-- [ ] Countdown: freeze input, teleport players to the mode's arena spawns,
-      3-2-1 banner.
+- [x] Server-owned director: states `HUB → COUNTDOWN → PLAYING →
+      ROUND_END → HUB` (`GameDirector`).
+- [x] Server owns state; broadcast `{state, timer, hill, king, scores}` folded
+      into the World snapshot.
+- [x] Round-start trigger: the crown in the town's (now enterable) south house.
+- [x] Countdown: 3-2-1 banner. *(No teleport/freeze — KotH plays in the hub.)*
 - [ ] Per-mode hooks: `on_start()`, `check_win() -> winner/none`,
       `on_end(winner)`. Modes are data/subclasses plugged into the director.
-- [ ] Win detection → award scores → `ROUND_END` (show result) → return to hub
-      (teleport back, restore free play).
-- [ ] Round timer + HUD (state banner, time left).
+- [x] Win detection → award scores → `ROUND_END` (show result) → return to hub.
+- [x] Round timer + HUD (state banner, time left, King, scores).
 - [ ] Drop-in/drop-out mid-round: joiners spectate until next round (or
       late-join if the mode allows); leavers don't stall the round.
 - [ ] Abort/cancel (host request, or auto-abort if too few players remain).
@@ -136,8 +134,9 @@ audio and minimal feedback.*
 
 *Mostly rules layered over existing geography + combat.*
 
-- [ ] **King of the Hill** — hold a spot (tower top / a snowy hill) while others
-      snowball/shoot/swing you off. Reuses powers + knockback.
+- [x] **King of the Hill** — DONE. Rotating hill spots across the hub;
+      sole-occupant scoring; crown-in-south-house start; 2.5 min, most control
+      wins. Powers/knockback are the displacement tool.
 - [ ] **Power Brawl / Deathmatch** — timed, most knockouts wins; powers as arena
       pickups.
 - [ ] **Race** — checkpoint course across the map; bunny-ears + tunnels are the

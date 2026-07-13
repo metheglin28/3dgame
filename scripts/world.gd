@@ -41,6 +41,7 @@ func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 
 	if multiplayer.is_server():
+		GameDirector.reset_session()
 		# MultiplayerSpawner replays already-spawned nodes to peers that join later,
 		# so it's safe to just spawn everyone currently known about right now.
 		for id in NetworkManager.player_names:
@@ -62,6 +63,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_server_disconnected() -> void:
 	GameState.release_mouse()
+	GameDirector.reset_session()
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
@@ -83,8 +85,9 @@ func _spawn_player(id: int) -> Node:
 	return p
 
 
-func _physics_process(_delta: float) -> void:
-	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}}
+func _physics_process(delta: float) -> void:
+	GameDirector.tick(delta)
+	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}, "director": GameDirector.net_state()}
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
@@ -117,6 +120,7 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 		var proj := get_node_or_null(path)
 		if proj:
 			proj.apply_remote_state(snapshot["projectiles"][path])
+	GameDirector.apply_net_state(snapshot["director"])
 
 
 ## Called by a player (server-side only, see player.gd's _request_throw) to

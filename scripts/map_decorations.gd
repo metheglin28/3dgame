@@ -22,6 +22,7 @@ const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
 const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
 const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
 const CHEST_SCENE := preload("res://scenes/chest.tscn")
+const CROWN_SCENE := preload("res://scenes/crown.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -565,7 +566,9 @@ func _build_town() -> void:
 	_add_house(Vector3(14, 0, 8), Color(0.55, 0.65, 0.85))
 	_add_house(Vector3(-14, 0, 8), Color(0.55, 0.8, 0.75))
 	_add_house(Vector3(14, 0, -8), Color(0.85, 0.8, 0.5))
-	_add_house(Vector3(-14, 0, -8), Color(0.75, 0.6, 0.8))
+	# The south house is hollow and enterable (door faces the plaza): the crown
+	# on the table inside is where you start a King of the Hill round.
+	_build_crown_house(Vector3(-14, 0, -8), Color(0.75, 0.6, 0.8))
 
 	# Open-fronted shop at the north end of the plaza, facing the spawn.
 	_add_box(Vector3(0, 1.5, 18.2), Vector3(7, 3, 0.4), Color(0.8, 0.7, 0.55))   # back wall
@@ -600,6 +603,30 @@ func _build_town() -> void:
 func _add_house(pos: Vector3, wall_color: Color) -> void:
 	_add_box(pos + Vector3(0, 2, 0), Vector3(6, 4, 5), wall_color)
 	_add_box(pos + Vector3(0, 4.75, 0), Vector3(6.6, 1.5, 5.6), BARN_ROOF)
+
+
+## Same footprint as _add_house but hollow and walk-in: four walls (a doorway
+## gap in the north wall, facing the plaza), a roof, a table, and the crown
+## that starts a King of the Hill round (see crown.gd).
+func _build_crown_house(pos: Vector3, wall_color: Color) -> void:
+	var t := 0.3    # wall thickness
+	var h := 3.6    # wall height
+	var hy := h * 0.5
+	# south / east / west walls (full)
+	_add_box(pos + Vector3(0, hy, -2.5), Vector3(6, h, t), wall_color)
+	_add_box(pos + Vector3(3.0, hy, 0), Vector3(t, h, 5), wall_color)
+	_add_box(pos + Vector3(-3.0, hy, 0), Vector3(t, h, 5), wall_color)
+	# north wall split around a 2m doorway facing +z (the plaza)
+	_add_box(pos + Vector3(-2.0, hy, 2.5), Vector3(2, h, t), wall_color)
+	_add_box(pos + Vector3(2.0, hy, 2.5), Vector3(2, h, t), wall_color)
+	_add_box(pos + Vector3(0, h - 0.3, 2.5), Vector3(2, 0.6, t), wall_color) # lintel over the door
+	# roof
+	_add_box(pos + Vector3(0, h + 0.35, 0), Vector3(6.6, 1.5, 5.6), BARN_ROOF)
+	# a little table against the back wall, crown on top
+	_add_box(pos + Vector3(0, 0.45, -1.6), Vector3(1.2, 0.9, 0.8), FENCE_WOOD)
+	var crown := CROWN_SCENE.instantiate()
+	crown.position = pos + Vector3(0, 0.95, -1.6)
+	add_child(crown)
 
 
 # --- NE: forest -----------------------------------------------------------------

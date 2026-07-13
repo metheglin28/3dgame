@@ -162,6 +162,7 @@ const NET_SNAP_DISTANCE := 4.0
 @onready var options_button: Button = $HUD/OptionsButton
 @onready var options_menu: Control = $HUD/OptionsMenu
 @onready var player_list_label: Label = $HUD/PlayerListLabel
+@onready var round_label: Label = $HUD/RoundLabel
 
 
 func _ready() -> void:
@@ -254,6 +255,7 @@ func _on_leave_pressed() -> void:
 	# closing our own peer either shuts the server down (dropping everyone
 	# else too) or just disconnects us, and either way we land back on the menu.
 	GameState.release_mouse()
+	GameDirector.reset_session() # so the hill ring / round state doesn't linger
 	NetworkManager.leave_game()
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
@@ -288,6 +290,46 @@ func _process(delta: float) -> void:
 	prompt_label.visible = current_interactable != null
 	if current_interactable:
 		prompt_label.text = "[E] " + current_interactable.get_prompt()
+	_update_round_hud()
+
+
+## Draws the King of the Hill banner/scoreboard from the synced GameDirector
+## state (local player only). Plain text keeps the HUD change tiny.
+func _update_round_hud() -> void:
+	match GameDirector.state:
+		GameDirector.HUB:
+			if GameDirector.session_wins.is_empty():
+				round_label.text = ""
+			else:
+				round_label.text = "King of the Hill — round wins\n" + _score_lines()
+		GameDirector.COUNTDOWN:
+			round_label.text = "KING OF THE HILL\nget to the crowned ring!  %d" % ceili(GameDirector.timer)
+		GameDirector.PLAYING:
+			var king := "—"
+			if GameDirector.king_id != -1:
+				king = str(NetworkManager.player_names.get(GameDirector.king_id, "?"))
+			round_label.text = "%s   King: %s\n%s" % [_clock(GameDirector.timer), king, _score_lines()]
+		GameDirector.ROUND_END:
+			var w := "Nobody"
+			if GameDirector.last_winner != -1:
+				w = str(NetworkManager.player_names.get(GameDirector.last_winner, "?"))
+			round_label.text = "%s wins the round!\n" % w + _score_lines()
+
+
+func _clock(t: float) -> String:
+	var s := int(ceilf(t))
+	return "%d:%02d" % [s / 60, s % 60]
+
+
+func _score_lines() -> String:
+	# Show each player's control time this round (if any) + their session wins.
+	var names := NetworkManager.player_names
+	var lines: Array[String] = []
+	for id in names:
+		var ct := float(GameDirector.control_time.get(id, 0.0))
+		var wins := int(GameDirector.session_wins.get(id, 0))
+		lines.append("%s  %ds held  ·  %d win%s" % [str(names[id]), int(ct), wins, "" if wins == 1 else "s"])
+	return "\n".join(lines)
 
 
 func _physics_process(delta: float) -> void:
