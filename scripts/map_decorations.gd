@@ -21,6 +21,7 @@ const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
 const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
 const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
 const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
+const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
 
@@ -339,6 +340,7 @@ func _add_rock(x: float, z: float, radius: float) -> void:
 func _add_sign(pos: Vector3, text: String) -> void:
 	_add_box(pos + Vector3(0, 1.0, 0), Vector3(0.15, 2.0, 0.15), FENCE_WOOD)
 	var label := Label3D.new()
+	label.set_script(SIGN_LABEL_SCRIPT) # fades the text in only when you're near
 	label.position = pos + Vector3(0, 2.4, 0)
 	label.text = text
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED

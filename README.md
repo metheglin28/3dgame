@@ -63,7 +63,8 @@ same ranges the sliders allow.
 - **Three NPCs** who wander around and say a random one-liner each (with their
   own personality/lines) when you talk to them. One of them is lost. Name
   tags and speech bubbles (on NPCs and other players alike) fade in only when
-  you're close by, so you're not reading every name across the whole map.
+  you're close by, so you're not reading every name across the whole map. The
+  same goes for signpost text.
 - **A snowman in the snowy hills** who'll grant you a snowball hat if you talk
   to him — while you're wearing it, click to lob snowballs instead of your
   hands staying empty. Talk to him again to take it off.
