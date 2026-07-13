@@ -107,6 +107,21 @@ const GEM_COLORS: Array[Color] = [
 const SHAFT_RADIUS := 2.2
 const TORCH_COLOR := Color(1.0, 0.65, 0.3, 1)
 
+## The wizard-less tower: a tall stone cylinder with a cone roof standing in
+## the void west of the farm, past the map's edge. Its ONLY entrance is a
+## corridor from tunnel Level A -- the gate cell below is a Level A rock cell
+## the tunnel builder leaves empty so the corridor can pass through it.
+## Interior deliberately undesigned for now: one big empty room, sized for
+## elbow room (15m across, ~28m of open height) to build into later.
+const TOWER_CENTER := Vector2(-76, 40)
+const TOWER_INNER_R := 7.5
+const TOWER_WALL_T := 1.2
+const TOWER_TOP := 22.0    # wall top above grade; cone roof sits on this
+const TOWER_BASE := -6.5   # buried foundation; interior floor is Level A depth
+const TOWER_SEGMENTS := 16
+const TOWER_GATE_CELL := Vector2i(0, 19) # Level A rock cell the corridor pierces
+const TOWER_ROOF_COLOR := Color(0.3, 0.34, 0.45, 1)
+
 const LEVEL_A_ORIGIN := Vector2(-57.5, -57.5)
 const LEVEL_A_ROWS: Array[String] = [
 	"#.#.#####.###.#.#.#.#.#",
@@ -177,6 +192,7 @@ func _ready() -> void:
 	_build_snowy_hills()
 	_build_ground_collision()
 	_build_tunnels()
+	_build_tower()
 
 
 # --- primitive helpers --------------------------------------------------------
@@ -721,8 +737,8 @@ func _build_cave() -> void:
 ## the slope. The chain's two ends are left open as doorways; the rooms' own
 ## walls frame them. Landing walls sit 2cm proud of the segment walls' planes
 ## so overlapping coplanar faces don't z-fight.
-func _add_corridor(points: Array) -> void:
-	var hw := HALL_W * 0.5
+func _add_corridor(points: Array, width: float = HALL_W, height: float = HALL_H) -> void:
+	var hw := width * 0.5
 	var wt := 1.0
 	var axes: Array[Vector3] = [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]
 	for i in range(points.size() - 1):
@@ -740,16 +756,16 @@ func _add_corridor(points: Array) -> void:
 		fa.y = a.y
 		fb.y = b.y
 		if i == 0:
-			_add_box(Vector3(a.x, a.y - 0.125, a.z) + dir * 0.275, _along(dir, 1.25, 0.25, HALL_W), CAVE_FLOOR)
-			_add_box(Vector3(a.x, a.y + HALL_H - 0.125, a.z) + dir * 0.275, _along(dir, 1.25, 0.25, HALL_W + 0.4), CAVE_ROCK)
+			_add_box(Vector3(a.x, a.y - 0.125, a.z) + dir * 0.275, _along(dir, 1.25, 0.25, width), CAVE_FLOOR)
+			_add_box(Vector3(a.x, a.y + height - 0.125, a.z) + dir * 0.275, _along(dir, 1.25, 0.25, width + 0.4), CAVE_ROCK)
 		if i == points.size() - 2:
-			_add_box(Vector3(b.x, b.y - 0.125, b.z) - dir * 0.275, _along(dir, 1.25, 0.25, HALL_W), CAVE_FLOOR)
-			_add_box(Vector3(b.x, b.y + HALL_H - 0.125, b.z) - dir * 0.275, _along(dir, 1.25, 0.25, HALL_W + 0.4), CAVE_ROCK)
-		_add_ramp(fa, fb, HALL_W, CAVE_FLOOR)
-		_add_ramp(fa + Vector3.UP * HALL_H, fb + Vector3.UP * HALL_H, HALL_W + 0.4, CAVE_ROCK)
+			_add_box(Vector3(b.x, b.y - 0.125, b.z) - dir * 0.275, _along(dir, 1.25, 0.25, width), CAVE_FLOOR)
+			_add_box(Vector3(b.x, b.y + height - 0.125, b.z) - dir * 0.275, _along(dir, 1.25, 0.25, width + 0.4), CAVE_ROCK)
+		_add_ramp(fa, fb, width, CAVE_FLOOR)
+		_add_ramp(fa + Vector3.UP * height, fb + Vector3.UP * height, width + 0.4, CAVE_ROCK)
 		var side := Vector3(dir.z, 0, -dir.x)
 		var y_lo := minf(a.y, b.y) - 0.5
-		var y_hi := maxf(a.y, b.y) + HALL_H + 0.6
+		var y_hi := maxf(a.y, b.y) + height + 0.6
 		var mid := (fa + fb) * 0.5
 		var run := Vector2(fb.x - fa.x, fb.z - fa.z).length()
 		for s: float in [-1.0, 1.0]:
@@ -760,19 +776,88 @@ func _add_corridor(points: Array) -> void:
 		var v: Vector3 = points[i]
 		var d_in := Vector3(v.x - points[i - 1].x, 0, v.z - points[i - 1].z).normalized()
 		var d_out := Vector3(points[i + 1].x - v.x, 0, points[i + 1].z - v.z).normalized()
-		_add_box(Vector3(v.x, v.y - 0.125, v.z), Vector3(HALL_W, 0.25, HALL_W), CAVE_FLOOR)
-		_add_box(Vector3(v.x, v.y + HALL_H - 0.125, v.z), Vector3(HALL_W + 0.4, 0.25, HALL_W + 0.4), CAVE_ROCK)
+		_add_box(Vector3(v.x, v.y - 0.125, v.z), Vector3(width, 0.25, width), CAVE_FLOOR)
+		_add_box(Vector3(v.x, v.y + height - 0.125, v.z), Vector3(width + 0.4, 0.25, width + 0.4), CAVE_ROCK)
 		for axis in axes:
 			if axis.is_equal_approx(-d_in) or axis.is_equal_approx(d_out):
 				continue # the openings to the previous/next straight
 			var c := Vector3(v.x, 0, v.z) + axis * (hw + wt * 0.5 + 0.02)
-			var size := Vector3(wt, HALL_H + 1.1, HALL_W + 2.0 * wt) if absf(axis.x) > 0.5 else Vector3(HALL_W + 2.0 * wt, HALL_H + 1.1, wt)
-			_add_box(Vector3(c.x, v.y + (HALL_H + 1.1) * 0.5 - 0.5, c.z), size, CAVE_ROCK)
+			var size := Vector3(wt, height + 1.1, width + 2.0 * wt) if absf(axis.x) > 0.5 else Vector3(width + 2.0 * wt, height + 1.1, wt)
+			_add_box(Vector3(c.x, v.y + (height + 1.1) * 0.5 - 0.5, c.z), size, CAVE_ROCK)
 
 
 ## A box size whose long dimension runs along the (axis-aligned) direction.
 func _along(dir: Vector3, length: float, height: float, width: float) -> Vector3:
 	return Vector3(length, height, width) if absf(dir.x) > 0.5 else Vector3(width, height, length)
+
+
+# --- the tower (west of the farm, past the map edge) ----------------------------
+
+func _build_tower() -> void:
+	var cx := TOWER_CENTER.x
+	var cz := TOWER_CENTER.y
+	var wall_r := TOWER_INNER_R + TOWER_WALL_T * 0.5
+	var wall_h := TOWER_TOP - TOWER_BASE
+	# The shell: a ring of thick box segments (a 16-gon reads as a cylinder in
+	# this art style, and thick boxes can't blind a clipping camera the way a
+	# thin tube could). Segment 0 faces east toward the corridor and is
+	# skipped -- that's the doorway.
+	var chord := 2.0 * wall_r * sin(PI / TOWER_SEGMENTS) + 0.2
+	for i in range(TOWER_SEGMENTS):
+		if i == 0:
+			continue
+		var ang := TAU * float(i) / TOWER_SEGMENTS
+		var pos := Vector3(cx + cos(ang) * wall_r, (TOWER_BASE + TOWER_TOP) * 0.5, cz + sin(ang) * wall_r)
+		_add_yaw_box(pos, Vector3(TOWER_WALL_T, wall_h, chord), -ang, STONE_GRAY)
+	# Plug the doorway segment above the corridor's roof so the opening is a
+	# door, not a floor-to-battlements slot.
+	_add_box(Vector3(cx + wall_r, (TOWER_TOP - 2.2) * 0.5, cz), Vector3(TOWER_WALL_T, TOWER_TOP + 2.2, chord + 0.3), STONE_GRAY)
+	# Interior floor: a flat stone disc at Level A depth, where the corridor
+	# arrives. Everything above it is deliberately empty for now.
+	_add_cylinder(Vector3(cx, -6.15, cz), TOWER_INNER_R + 0.4, TOWER_INNER_R + 0.4, 0.3, TUNNEL_FLOOR_COLOR)
+	# Cone roof with a little gold finial. Visual only -- nothing can get up
+	# there yet.
+	_add_cylinder(Vector3(cx, TOWER_TOP + 3.5, cz), 0.0, TOWER_INNER_R + 2.1, 7.0, TOWER_ROOF_COLOR, false)
+	_add_sphere(Vector3(cx, TOWER_TOP + 7.2, cz), 0.35, Color(0.9, 0.75, 0.3, 1), false)
+
+	# The gate: refill the skipped Level A rock cell around a corridor-sized
+	# hole (side strips + a header over the corridor roof), then run the
+	# corridor from the neighboring tunnel room straight west into the tower.
+	var gx := LEVEL_A_ORIGIN.x + TOWER_GATE_CELL.x * TUNNEL_CELL
+	var gz := LEVEL_A_ORIGIN.y + TOWER_GATE_CELL.y * TUNNEL_CELL
+	_add_box(Vector3(gx + 2.5, LEVEL_A_Y + 2.0, gz + 0.7), Vector3(5, 4, 1.4), TUNNEL_ROCK)
+	_add_box(Vector3(gx + 2.5, LEVEL_A_Y + 2.0, gz + 4.3), Vector3(5, 4, 1.4), TUNNEL_ROCK)
+	_add_box(Vector3(gx + 2.5, LEVEL_A_Y + 3.8, gz + 2.5), Vector3(5, 0.4, 4.6), TUNNEL_ROCK)
+	_add_corridor([
+		Vector3(gx + 5.0, LEVEL_A_Y + 0.02, cz),   # west face of the Level A room
+		Vector3(cx + TOWER_INNER_R, LEVEL_A_Y + 0.02, cz), # tower's inner wall face
+	], 2.2, 3.8)
+	_add_torch(Vector3(-58, LEVEL_A_Y + 1.9, cz))
+	_add_torch(Vector3(-64, LEVEL_A_Y + 1.9, cz))
+	# A pair of torches inside so the big empty room isn't pitch black.
+	_add_torch(Vector3(cx + 5.5, LEVEL_A_Y + 2.2, cz + 1.8))
+	_add_torch(Vector3(cx + 5.5, LEVEL_A_Y + 2.2, cz - 1.8))
+
+
+## A box rotated around Y (mesh + collision) -- the tower's wall segments
+## need to sit tangent to the circle they form.
+func _add_yaw_box(pos: Vector3, size: Vector3, yaw: float, color: Color) -> void:
+	var body := StaticBody3D.new()
+	body.position = pos
+	body.rotation.y = yaw
+	body.collision_layer = 1
+	add_child(body)
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = size
+	mesh.mesh = box
+	mesh.material_override = _make_material(color)
+	body.add_child(mesh)
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	col.shape = shape
+	body.add_child(col)
 
 
 ## A skull: sphere cranium, box jaw, two dark eye sockets. Faces -z at yaw 0.
@@ -1011,7 +1096,7 @@ func _build_tunnels() -> void:
 	# warm brown rock lit by torches; Level B is darker, grayer, and studded
 	# with glowing gems -- the deeper you go, the stranger it gets.
 	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, CONNECTOR_SHAFTS,
-		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false)
+		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL])
 	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [],
 		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true)
 
@@ -1022,7 +1107,7 @@ func _build_tunnels() -> void:
 
 
 func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array,
-		rock: Color, floor_color: Color, ceiling_color: Color, gems: bool) -> void:
+		rock: Color, floor_color: Color, ceiling_color: Color, gems: bool, skip_cells: Array = []) -> void:
 	var cols := rows[0].length()
 	var grid_rows := rows.size()
 	var width := cols * TUNNEL_CELL
@@ -1053,6 +1138,8 @@ func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_h
 			var x := origin.x + gx * TUNNEL_CELL + TUNNEL_CELL * 0.5
 			var z := origin.y + gy * TUNNEL_CELL + TUNNEL_CELL * 0.5
 			if row[gx] == "#":
+				if Vector2i(gx, gy) in skip_cells:
+					continue # someone else fills this cell (see _build_tower)
 				_add_box(Vector3(x, y + TUNNEL_WALL_HEIGHT * 0.5, z), Vector3(TUNNEL_CELL, TUNNEL_WALL_HEIGHT, TUNNEL_CELL), rock)
 				if gems:
 					# Stud every wall face that borders open corridor with a

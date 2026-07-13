@@ -126,6 +126,12 @@ same ranges the sliders allow.
   instead of clipping through them, and the thin shaft/ceiling meshes are
   single-sided so the camera never gets blinded by one filling the screen
   underground.
+- **A stone tower** standing in the void west of the farm, past the map edge
+  — a tall cylindrical shell of stone blocks with a cone roof, classic
+  fantasy tower. Its only way in is a corridor off the first underground
+  level (a gap punched through the tunnel's west wall). The interior is one
+  big empty room for now, deliberately left undesigned — plenty of elbow
+  room to build into later.
 
 ## Project layout
 
