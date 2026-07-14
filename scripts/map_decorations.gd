@@ -1265,9 +1265,13 @@ func _build_canyon_maze() -> void:
 func _build_snowy_hills() -> void:
 	# Rounded mounds sunk partway into the ground so they read as hills you can
 	# actually walk up and over.
+	# NOTE: the underground entrance's open trench cuts x -33..-27, z -43.5..-32.5
+	# (see _entrance_trench for "snow") -- keep mounds/snowman CLEAR of that
+	# rect, or their above-ground colliders cap the entrance shut. One mound
+	# used to sit at (-30,-36), dead center on it, burying the whole ramp.
 	var mounds := [
 		[-20, -20, 4.0], [-32, -18, 5.0], [-46, -22, 6.0], [-54, -34, 5.0],
-		[-44, -40, 4.5], [-30, -36, 5.5], [-18, -44, 4.0], [-38, -52, 6.0],
+		[-44, -40, 4.5], [-39, -36, 5.5], [-18, -44, 4.0], [-38, -52, 6.0],
 		[-52, -52, 4.5], [-24, -54, 5.0],
 	]
 	for m in mounds:
@@ -1285,9 +1289,11 @@ func _build_snowy_hills() -> void:
 	_add_rock(-36, -22, 0.7)
 	_add_rock(-20, -32, 0.5)
 
-	# The mandatory snowman -- also grants the snowball-throwing power (see snowman.gd).
+	# The mandatory snowman -- also grants the snowball-throwing power (see
+	# snowman.gd). Kept beside the tunnel trench, not on it (see NOTE above; he
+	# used to stand at (-30,-33), hanging over the hole).
 	var snowman := SNOWMAN_SCENE.instantiate()
-	snowman.position = Vector3(-30, 0, -33)
+	snowman.position = Vector3(-24.5, 0, -31)
 	add_child(snowman)
 
 
