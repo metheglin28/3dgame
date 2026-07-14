@@ -130,7 +130,12 @@ const TUMBLE_SPEED := 9.0
 # `slow` flag rides the per-player snapshot).
 const SHOVE_SCALE := 0.6
 const SHOVE_TIME := 0.35
-const SLOW_MULT := 0.55       # 45% slower
+const SLOW_MULT := 0.55         # 45% slower
+# Slowed targets blend toward ONE shared frost blue -- a moderate blend keeps
+# identity, and lifting the blue channel to ~red guarantees even warm colors
+# (the orange player) read cool rather than merely washed out.
+const FROST_COLOR := Color(0.5, 0.7, 1.0)
+const FROST_BLEND := 0.45
 var _push_timer := 0.0
 var _slow_timer := 0.0
 var _slow_tinted := false
@@ -610,9 +615,11 @@ func set_slow_tint(v: bool) -> void:
 		if base is StandardMaterial3D:
 			frost = (base as StandardMaterial3D).duplicate()
 			var c: Color = frost.albedo_color
-			frost.albedo_color = Color(c.r * 0.55, c.g * 0.75, minf(c.b * 1.3 + 0.25, 1.0), c.a)
+			var cold := c.lerp(FROST_COLOR, FROST_BLEND)
+			cold.b = maxf(cold.b, cold.r * 0.95)
+			frost.albedo_color = Color(cold, c.a)
 		else:
-			frost.albedo_color = Color(0.55, 0.7, 1.0)
+			frost.albedo_color = FROST_COLOR
 		mesh.material_override = frost
 	else:
 		mesh.material_override = _pre_slow_material
