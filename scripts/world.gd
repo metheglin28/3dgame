@@ -9,6 +9,7 @@ const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const SNOWBALL_SCENE := preload("res://scenes/snowball.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 const GOBLIN_SCENE := preload("res://scenes/goblin.tscn")
+const TROLL_SCENE := preload("res://scenes/troll.tscn")
 
 # The co-op Goblin Siege wave, spawned onto the dungeon arena disc when a boss
 # round starts (see GameDirector). Six goblins for now; the troll joins in a
@@ -217,15 +218,23 @@ func _spawn_boss_wave() -> void:
 		var a := TAU * float(i) / float(BOSS_GOBLIN_SKINS.size())
 		var pos := ARENA_CENTER + Vector3(cos(a) * 8.0, 0, sin(a) * 8.0)
 		enemy_spawner.spawn({"kind": "goblin", "idx": i, "pos": pos})
+	# The troll: the seventh enemy, planted dead center.
+	enemy_spawner.spawn({"kind": "troll", "idx": 6, "pos": ARENA_CENTER})
 
 
 func _spawn_enemy(data: Dictionary) -> Node:
 	var idx := int(data["idx"])
-	var e := GOBLIN_SCENE.instantiate()
-	e.name = "Enemy%d" % idx
+	var e: Node3D
+	if data["kind"] == "troll":
+		e = TROLL_SCENE.instantiate()
+		e.name = "Troll"
+		e.npc_name = "Troll"
+	else:
+		e = GOBLIN_SCENE.instantiate()
+		e.name = "Enemy%d" % idx
+		e.skin_color = BOSS_GOBLIN_SKINS[idx % BOSS_GOBLIN_SKINS.size()]
+		e.npc_name = "Goblin"
 	e.arena_mode = true
-	e.skin_color = BOSS_GOBLIN_SKINS[idx % BOSS_GOBLIN_SKINS.size()]
-	e.npc_name = "Goblin"
 	e.position = data["pos"]
 	e.add_to_group("arena_enemy")
 	e.set_frozen(true)

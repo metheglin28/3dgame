@@ -41,6 +41,14 @@ const ARENA_AGGRO := 40.0  # the whole disc -- no dawdling once the fight is on
 @export var skin_color: Color = Color(0.38, 0.55, 0.22)
 @export var arena_mode := false
 
+# Attack tunables, seeded from the consts above but left as vars so subclasses
+# (the troll) can dial in a longer reach, harder knockback, and slower cadence
+# without reimplementing the chase brain.
+var attack_range := ATTACK_RANGE
+var attack_cooldown_time := ATTACK_COOLDOWN
+var attack_knockback := DAGGER_KNOCKBACK
+var chase_speed_mult := CHASE_SPEED_MULT
+
 @onready var dagger: Node3D = $Mesh/DaggerPivot
 
 var _attack_cooldown := 0.0
@@ -81,16 +89,22 @@ func _ai(delta: float) -> void:
 	var dist := to.length()
 	var dir := to.normalized()
 	rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), 10.0 * delta)
-	if dist > ATTACK_RANGE * 0.75:
-		velocity.x = dir.x * speed * CHASE_SPEED_MULT
-		velocity.z = dir.z * speed * CHASE_SPEED_MULT
+	if dist > attack_range * 0.75:
+		velocity.x = dir.x * speed * chase_speed_mult
+		velocity.z = dir.z * speed * chase_speed_mult
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
-	if dist <= ATTACK_RANGE and _attack_cooldown <= 0.0:
-		_attack_cooldown = ATTACK_COOLDOWN
-		_play_stab.rpc()
-		prey.apply_knockback(dir, DAGGER_KNOCKBACK)
+	if dist <= attack_range and _attack_cooldown <= 0.0:
+		_attack_cooldown = attack_cooldown_time
+		_attack(prey, dir)
+
+
+## The actual hit: cosmetic swing + knockback. Split out so the troll can swing
+## a club (and hit far harder) while reusing the whole chase loop above.
+func _attack(prey: Node3D, dir: Vector3) -> void:
+	_play_stab.rpc()
+	prey.apply_knockback(dir, attack_knockback)
 
 
 ## Nearest player who is inside the cave and close enough to bother chasing.
