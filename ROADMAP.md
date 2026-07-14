@@ -173,6 +173,10 @@ audio and minimal feedback.*
 
 ## Loose threads to fold in (don't let these rot)
 
+- [ ] **The moon (secret area)** — Stage 1 built: lunar disc + space shell +
+      teleport planes + low-grav band. Pending: Stage 2 (Moon Ears — the
+      bunny-ears variation) and Stage 3 (the easter egg hunt mini-game).
+
 - [ ] **Gem caverns (Level B)** — built but sealed; give it a purpose (a mode
       arena? a coop objective?) or cut it.
 - [ ] **Stone tower interior** — empty; candidate Sumo arena or KotH spot.

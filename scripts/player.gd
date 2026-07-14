@@ -96,6 +96,11 @@ var wearing_wizard_hat: bool = false:
 const CAST_COOLDOWN := 0.5
 var _cast_cooldown: float = 0.0
 
+# The lunar low-gravity band: any airtime above LOW_GRAV_Y falls softly. Only
+# the secret moon area (and the teleport arrival above it) lives that high.
+const LOW_GRAV_Y := 150.0
+const LOW_GRAV_MULT := 0.35
+
 const BUNNY_JUMP_BASE := 1.2247 # = sqrt(1.5): a 1.5x jump HEIGHT (height goes as velocity^2)
 const BOUNCE_STEP := 1.12      # each in-rhythm bounce multiplies jump by this
 const BOUNCE_WINDOW := 0.25    # re-jump within this long of landing to keep the streak
@@ -453,7 +458,12 @@ func _physics_process(delta: float) -> void:
 	set_slow_tint(_slow_timer > 0.0)
 
 	if not is_on_floor():
-		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
+		var g: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+		# The lunar band: anything this high is the secret moon area (or the
+		# float down onto it) -- gravity goes soft. See world.gd's moon planes.
+		if global_position.y > LOW_GRAV_Y:
+			g *= LOW_GRAV_MULT
+		velocity.y -= g * delta
 
 	# Track how long we've been grounded, for the bunny-ears bounce rhythm:
 	# 0 the instant we land, growing while we stand around.

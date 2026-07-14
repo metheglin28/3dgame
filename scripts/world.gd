@@ -27,6 +27,19 @@ const BOSS_GOBLIN_SKINS: Array[Color] = [
 # floor. Players teleport back to a town spawn; NPCs despawn.
 const KILL_PLANE_Y := -34.0
 
+# The secret lunar area's teleport planes (see map_decorations._build_moon for
+# the place itself; the low-gravity band is in player.gd). Both are server-side
+# position checks, not colliders, so they can't be tunneled through at speed.
+# Bounce above MOON_ENTRY_Y anywhere over the hub -> arrive in the sky above
+# the moon and float down; fall past MOON_EXIT_Y anywhere around the moon
+# (i.e., off any edge) -> dropped out of the sky high over town.
+const MOON_ENTRY_Y := 85.0
+const MOON_HUB_HALF := 62.0                    # "over the hub" bounds for entry
+const MOON_ARRIVAL := Vector3(400, 275, 400)   # ~14m above the lunar surface
+const MOON_EXIT_Y := 230.0
+const MOON_REGION_HALF := 90.0                 # exit plane's span around the moon
+const MOON_REENTRY := Vector3(0, 70, 8)        # high over the town spawn
+
 @onready var players_node: Node3D = $Players
 @onready var spawner: MultiplayerSpawner = $Players/MultiplayerSpawner
 
@@ -124,6 +137,7 @@ func _spawn_player(id: int) -> Node:
 func _physics_process(delta: float) -> void:
 	GameDirector.tick(delta)
 	_enforce_kill_plane()
+	_enforce_moon_planes()
 	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}, "director": GameDirector.net_state()}
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
@@ -185,6 +199,25 @@ func _enforce_kill_plane() -> void:
 			else:
 				# A static scene NPC lives on every peer; free it everywhere.
 				_remove_node.rpc(npc.get_path())
+
+
+## Server-only. The lunar teleport planes: entry (bounce high over the hub) and
+## exit (fall off the moon's edge). Simple position checks each physics frame.
+func _enforce_moon_planes() -> void:
+	for id in player_nodes:
+		var p: Node3D = player_nodes[id]
+		if p.spectating:
+			continue
+		var pos: Vector3 = p.global_position
+		if pos.y > MOON_ENTRY_Y and absf(pos.x) < MOON_HUB_HALF and absf(pos.z) < MOON_HUB_HALF:
+			p.global_position = MOON_ARRIVAL
+			# Kill the launch: crest gently and float down in low gravity.
+			p.velocity = Vector3(0, minf(p.velocity.y, 4.0), 0)
+		elif pos.y < MOON_EXIT_Y and pos.y > MOON_EXIT_Y - 60.0 \
+				and absf(pos.x - MOON_ARRIVAL.x) < MOON_REGION_HALF \
+				and absf(pos.z - MOON_ARRIVAL.z) < MOON_REGION_HALF:
+			p.global_position = MOON_REENTRY
+			p.velocity = Vector3.ZERO
 
 
 ## A random town spawn marker's position (same set the game spawns players at).

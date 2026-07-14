@@ -147,6 +147,19 @@ const DUNGEON_ARENA_Y := -16.0     # arena floor depth (corridor descends to it)
 const DUNGEON_CEIL_Y := -1.0       # roof, kept just below grade so it stays hidden
 const DUNGEON_PIT_Y := -40.0       # catch floor far below the disc ("very tall")
 const DUNGEON_GATE_CELL := Vector2i(22, 19) # east Level A wall cell the corridor pierces
+## The secret lunar area: a moonscape floating high in the void off the map's
+## NE corner, unreachable by sight or foot. Entry/exit are TELEPORT PLANES
+## (server-side position checks in world.gd): bunny-bounce above MOON_ENTRY_Y
+## anywhere over the hub and you're teleported here, arriving in the sky and
+## floating down in low gravity (the band is in player.gd); hop off any edge
+## and falling past the exit plane drops you back out of the sky over town.
+## A huge inside-out black shell studded with stars -- plus the Earth hanging
+## in the distance -- sells "you are on the moon now".
+const MOON_CENTER := Vector3(400, 260, 400)  # lunar disc center (floor top ~260.6)
+const MOON_RADIUS := 22.0
+const MOON_GRAY := Color(0.6, 0.6, 0.65, 1)
+const MOON_CRATER_GRAY := Color(0.45, 0.45, 0.5, 1)
+
 const DUNGEON_ROCK := Color(0.26, 0.24, 0.28, 1)
 const DUNGEON_FLOOR := Color(0.3, 0.28, 0.32, 1)
 const DUNGEON_CEILING_COLOR := Color(0.12, 0.11, 0.14, 1)
@@ -238,6 +251,7 @@ func _ready() -> void:
 	_build_tunnels()
 	_build_tower()
 	_build_dungeon()
+	_build_moon()
 
 
 # --- primitive helpers --------------------------------------------------------
@@ -985,6 +999,103 @@ func _build_tower() -> void:
 	# A pair of torches inside so the big empty room isn't pitch black.
 	_add_torch(Vector3(cx + 5.5, LEVEL_A_Y + 2.2, cz + 1.8))
 	_add_torch(Vector3(cx + 5.5, LEVEL_A_Y + 2.2, cz - 1.8))
+
+
+# --- the secret lunar area (high in the void, NE) --------------------------------
+
+func _build_moon() -> void:
+	var c := MOON_CENTER
+	# The lunar surface: a thick gray disc. Slightly proud rim so careless
+	# walkers get a hint before the drop -- but every edge IS the exit.
+	_add_cylinder(c, MOON_RADIUS, MOON_RADIUS + 0.6, 1.2, MOON_GRAY)
+	# Craters: darker inset discs with a rocky rim (visual discs, real rocks).
+	var craters := [
+		[Vector3(-8, 0, 5), 4.0], [Vector3(7, 0, -6), 5.5], [Vector3(2, 0, 10), 3.0],
+	]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0x300C
+	for cr in craters:
+		var cc: Vector3 = c + cr[0] + Vector3(0, 0.62, 0)
+		var r: float = cr[1]
+		_add_cylinder(cc, r, r, 0.08, MOON_CRATER_GRAY, false)
+		for k in range(7):
+			var a := TAU * float(k) / 7.0 + rng.randf_range(-0.2, 0.2)
+			_add_sphere(cc + Vector3(cos(a) * r, 0.1, sin(a) * r), rng.randf_range(0.3, 0.6), MOON_GRAY, false)
+	# Scattered boulders (these collide -- cover for future egg hiding).
+	for k in range(6):
+		var a := TAU * float(k) / 6.0 + rng.randf_range(-0.4, 0.4)
+		var d := rng.randf_range(9.0, 18.0)
+		_add_sphere(c + Vector3(cos(a) * d, 0.7, sin(a) * d), rng.randf_range(0.7, 1.3), MOON_GRAY)
+	# A little flag, planted by whoever bounced here first.
+	_add_box(c + Vector3(4, 1.7, 2), Vector3(0.08, 2.2, 0.08), Color(0.8, 0.8, 0.82))
+	_add_box(c + Vector3(4.45, 2.5, 2), Vector3(0.85, 0.55, 0.04), Color(0.85, 0.2, 0.2), false)
+
+	# The space illusion: a huge inside-out unshaded near-black shell around
+	# everything (CULL_FRONT renders only its interior faces, so from outside
+	# it's invisible-ish and from inside it swallows the sky), with emissive
+	# stars stuck to it and the Earth hanging in the black.
+	var shell := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 110.0
+	sm.height = 220.0
+	shell.mesh = sm
+	shell.position = c
+	var smat := StandardMaterial3D.new()
+	smat.albedo_color = Color(0.008, 0.008, 0.02)
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.cull_mode = BaseMaterial3D.CULL_FRONT
+	shell.material_override = smat
+	add_child(shell)
+	var star_mat := StandardMaterial3D.new()
+	star_mat.albedo_color = Color(1, 1, 1)
+	star_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	star_mat.emission_enabled = true
+	star_mat.emission = Color(1, 1, 0.95)
+	star_mat.emission_energy_multiplier = 1.5
+	for k in range(90):
+		# Random directions on the shell, biased to the upper hemisphere (stars
+		# below the disc are wasted).
+		var dir := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.25, 1), rng.randf_range(-1, 1)).normalized()
+		var star := MeshInstance3D.new()
+		var ss := SphereMesh.new()
+		var sr := rng.randf_range(0.25, 0.6)
+		ss.radius = sr
+		ss.height = sr * 2.0
+		star.mesh = ss
+		star.material_override = star_mat
+		star.position = c + dir * 104.0
+		add_child(star)
+	# The Earth: blue ball, green blotches, faintly self-lit against the black.
+	var earth_c := c + Vector3(-62, 38, -58)
+	var earth_mat := StandardMaterial3D.new()
+	earth_mat.albedo_color = Color(0.25, 0.45, 0.85)
+	earth_mat.emission_enabled = true
+	earth_mat.emission = Color(0.25, 0.45, 0.85)
+	earth_mat.emission_energy_multiplier = 0.35
+	var earth := MeshInstance3D.new()
+	var em := SphereMesh.new()
+	em.radius = 9.0
+	em.height = 18.0
+	earth.mesh = em
+	earth.material_override = earth_mat
+	earth.position = earth_c
+	add_child(earth)
+	var land_mat := StandardMaterial3D.new()
+	land_mat.albedo_color = Color(0.3, 0.65, 0.35)
+	land_mat.emission_enabled = true
+	land_mat.emission = Color(0.3, 0.65, 0.35)
+	land_mat.emission_energy_multiplier = 0.3
+	for k in range(5):
+		var dir := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.6, 0.6), rng.randf_range(-1, 1)).normalized()
+		var blotch := MeshInstance3D.new()
+		var bm := SphereMesh.new()
+		var br := rng.randf_range(1.8, 3.4)
+		bm.radius = br
+		bm.height = br * 1.1
+		blotch.mesh = bm
+		blotch.material_override = land_mat
+		blotch.position = earth_c + dir * 8.2
+		add_child(blotch)
 
 
 # --- the boss dungeon (buried in the void east of the forest) -------------------
