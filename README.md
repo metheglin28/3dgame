@@ -64,6 +64,18 @@ same ranges the sliders allow.
   snowballs, or the revolver is the whole game. Built on a reusable
   server-authoritative round controller (`GameDirector`) so more modes can slot
   in later.
+- **Goblin Siege (co-op boss round)** — a skull on a stake just past the boss
+  dungeon's entrance starts it. Seven enemies spawn frozen on the arena disc —
+  the six cave goblins and a **troll**: a ~6m brown giant with a wooden club
+  and the hardest knockback in the game. After a 3-2-1 countdown they go live
+  and hunt everyone on the disc. Nobody has health, so you "kill" enemies the
+  same way they kill you: **knock them off the disc into the pit**. The troll
+  is the puzzle — he doesn't ragdoll and has no immunity, he just gets shoved,
+  so gang up and heave him over the edge. Clear all seven before the ~2.5 min
+  timer to win; if every fighter gets knocked out (or time runs out with the
+  horde alive) you lose. Fall out mid-fight and you drop into a **spectator
+  chase-cam** following a living teammate (click to switch who you watch) until
+  the round ends and everyone's returned to town. Reward's still TBD.
 - **A player character** you can walk and look around with in third person,
   with a landing squash animation and a "Players Online" list in the corner.
 - **An interaction system** — look at something interactable and a prompt

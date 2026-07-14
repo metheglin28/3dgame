@@ -128,7 +128,7 @@ func _physics_process(delta: float) -> void:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
 		# (see player.gd for why).
-		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "bunny": p.wearing_bunny_ears, "tumble": p.tumble}
+		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "bunny": p.wearing_bunny_ears, "tumble": p.tumble, "spec": p.spectating}
 	for item in get_tree().get_nodes_in_group("sync_items"):
 		snapshot["items"][item.get_path()] = {"xform": item.global_transform, "held": item.carried_by}
 	for npc in get_tree().get_nodes_in_group("npc"):
@@ -163,10 +163,17 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 ## that has fallen below the kill plane gets dealt with: players are teleported
 ## back to a town spawn, NPCs are despawned across every peer.
 func _enforce_kill_plane() -> void:
+	var boss_live: bool = GameDirector.mode == GameDirector.Mode.BOSS and GameDirector.state == GameDirector.PLAYING
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
+		if p.spectating:
+			continue
 		if p.global_position.y < KILL_PLANE_Y:
-			p.respawn_at(_town_spawn())
+			if boss_live:
+				# Fall out of the arena mid-fight -> spectate, don't respawn.
+				p.enter_spectator()
+			else:
+				p.respawn_at(_town_spawn())
 	for npc in get_tree().get_nodes_in_group("npc"):
 		if npc.is_queued_for_deletion():
 			continue
@@ -207,8 +214,10 @@ func _on_director_state(new_state: int) -> void:
 			_spawn_boss_wave()
 		GameDirector.PLAYING:
 			_set_enemies_frozen(false)
+			_mark_participants()
 		GameDirector.ROUND_END:
 			_despawn_boss_wave()
+			_end_boss_players()
 
 
 ## Spawn the enemy wave onto the arena disc, frozen until the countdown ends.
@@ -249,6 +258,30 @@ func _set_enemies_frozen(v: bool) -> void:
 func _despawn_boss_wave() -> void:
 	for e in get_tree().get_nodes_in_group("arena_enemy"):
 		e.queue_free()
+
+
+## Record who's actually in the arena when the fight goes live; the round's lose
+## condition ("everyone's out") is measured against this set.
+func _mark_participants() -> void:
+	GameDirector.participants.clear()
+	for id in player_nodes:
+		var p: Node3D = player_nodes[id]
+		if _in_arena(p.global_position):
+			GameDirector.participants.append(p.peer_id)
+
+
+func _in_arena(pos: Vector3) -> bool:
+	return Vector2(pos.x - ARENA_CENTER.x, pos.z - ARENA_CENTER.z).length() < 17.0 and pos.y > -30.0
+
+
+## Round over: un-spectate everyone and send all the fighters back to the hub.
+func _end_boss_players() -> void:
+	for id in player_nodes:
+		var p: Node3D = player_nodes[id]
+		if p.spectating:
+			p.exit_spectator()
+		if p.peer_id in GameDirector.participants:
+			p.respawn_at(_town_spawn())
 
 
 ## Called by a player (server-side only, see player.gd's _request_throw) to

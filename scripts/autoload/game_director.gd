@@ -45,6 +45,11 @@ var control_time: Dictionary = {}  # peer_id -> seconds held this round
 var session_wins: Dictionary = {}  # peer_id -> rounds won this session
 var last_winner: int = -1
 
+# Boss fight (Goblin Siege). `participants` are the peers in the arena when it
+# went live (set by the World at PLAYING); the round is lost if they're all out.
+var participants: Array = []
+var boss_won := false
+
 var _marker: Node3D = null
 
 
@@ -56,6 +61,8 @@ func reset_session() -> void:
 	session_wins.clear()
 	last_winner = -1
 	hill_index = -1
+	participants.clear()
+	boss_won = false
 
 
 ## Server-only. Called by the crown (see crown.gd). Ignored unless we're idle in
@@ -80,6 +87,8 @@ func start_boss_fight() -> void:
 		return
 	mode = Mode.BOSS
 	control_time.clear()
+	participants.clear()
+	boss_won = false
 	king_id = -1
 	timer = COUNTDOWN_TIME
 	_set_state(COUNTDOWN)
@@ -96,9 +105,20 @@ func tick(delta: float) -> void:
 		PLAYING:
 			if mode == Mode.KOTH:
 				_update_king(delta)
-			timer -= delta
-			if timer <= 0.0:
-				_finish_round()
+				timer -= delta
+				if timer <= 0.0:
+					_finish_round()
+			else:
+				# Boss: win when the whole horde is ringed out; lose if every
+				# participant is out, or if the clock runs out with enemies alive.
+				if get_tree().get_nodes_in_group("arena_enemy").is_empty():
+					_finish_boss(true)
+				elif not participants.is_empty() and _alive_participants() == 0:
+					_finish_boss(false)
+				else:
+					timer -= delta
+					if timer <= 0.0:
+						_finish_boss(false)
 		ROUND_END:
 			timer -= delta
 			if timer <= 0.0:
@@ -134,6 +154,22 @@ func _finish_round() -> void:
 	_set_state(ROUND_END)
 
 
+func _finish_boss(won: bool) -> void:
+	boss_won = won
+	last_winner = -1
+	timer = RESULT_TIME
+	_set_state(ROUND_END)
+
+
+## How many of the arena's participants are still in the fight (not spectating).
+func _alive_participants() -> int:
+	var n := 0
+	for p in get_tree().get_nodes_in_group("players"):
+		if p.peer_id in participants and not p.spectating:
+			n += 1
+	return n
+
+
 func _set_state(s: int) -> void:
 	state = s
 	state_changed.emit(s)
@@ -145,7 +181,7 @@ func net_state() -> Dictionary:
 	return {
 		"st": state, "md": mode, "t": timer, "hill": hill_center, "king": king_id,
 		"ctrl": control_time.duplicate(), "wins": session_wins.duplicate(),
-		"win": last_winner,
+		"win": last_winner, "bwon": boss_won,
 	}
 
 
@@ -159,6 +195,7 @@ func apply_net_state(d: Dictionary) -> void:
 	control_time = d["ctrl"]
 	session_wins = d["wins"]
 	last_winner = d["win"]
+	boss_won = d["bwon"]
 
 
 ## --- the hill marker (local visual on every peer, driven by hill_center) ---

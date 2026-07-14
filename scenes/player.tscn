@@ -263,6 +263,9 @@ collide_with_areas = true
 collide_with_bodies = false
 collision_mask = 4
 
+[node name="SpectatorCam" type="Camera3D" parent="."]
+current = false
+
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="InteractPrompt" type="Label" parent="HUD"]

@@ -163,6 +163,13 @@ const NET_SNAP_DISTANCE := 4.0
 @onready var options_menu: Control = $HUD/OptionsMenu
 @onready var player_list_label: Label = $HUD/PlayerListLabel
 @onready var round_label: Label = $HUD/RoundLabel
+@onready var spectator_cam: Camera3D = $SpectatorCam
+
+# Spectator: set (server-authoritative) when this player falls out during a boss
+# fight. Synced to all peers so the body hides everywhere; the owning client
+# swaps to a chase-cam that follows a living teammate (click to cycle).
+var spectating := false
+var _spec_target: Node3D = null
 
 
 func _ready() -> void:
@@ -218,6 +225,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameState.toggle_mouse()
 		if GameState.mouse_captured:
 			options_menu.hide()
+	# While spectating, a click just switches which teammate you're watching --
+	# no interacting or throwing from the sidelines.
+	if spectating:
+		if event.is_action_pressed("throw") or event.is_action_pressed("interact"):
+			_cycle_spec_target()
+		return
 	if event.is_action_pressed("interact"):
 		_request_interact.rpc_id(1)
 	if event.is_action_pressed("throw"):
@@ -277,6 +290,10 @@ func _process(delta: float) -> void:
 	name_label.modulate.a = GameState.label_alpha(global_position)
 	if peer_id != multiplayer.get_unique_id():
 		return
+	if spectating:
+		_update_spectator_cam()
+		_update_round_hud()
+		return
 	# Local-only "am I looking at something?" check purely for the UI prompt text;
 	# the server does its own raycast before actually running the interaction.
 	if interact_ray.is_colliding():
@@ -331,8 +348,13 @@ func _update_boss_hud() -> void:
 			round_label.text = "GOBLIN SIEGE\nbrace yourself!  %d" % ceili(GameDirector.timer)
 		GameDirector.PLAYING:
 			round_label.text = "%s   Enemies left: %d" % [_clock(GameDirector.timer), enemies]
+			if spectating:
+				var who := "—"
+				if _spec_target != null and is_instance_valid(_spec_target):
+					who = _spec_target.display_name
+				round_label.text += "\nYou're out! Spectating %s  (click to switch)" % who
 		GameDirector.ROUND_END:
-			round_label.text = "The siege is over."
+			round_label.text = "Victory! The horde is broken." if GameDirector.boss_won else "Wiped out. The horde wins..."
 
 
 func _clock(t: float) -> String:
@@ -363,6 +385,11 @@ func _physics_process(delta: float) -> void:
 		_send_input.rpc_id(1, input_dir, camera_yaw, camera_pitch, jump_pressed, sprint_held)
 
 	if not multiplayer.is_server():
+		return
+
+	# Out of the fight: the body is parked and inert until the round ends.
+	if spectating:
+		velocity = Vector3.ZERO
 		return
 
 	# Server-side simulation for this player, driven by the last input it sent us.
@@ -511,6 +538,88 @@ func respawn_at(pos: Vector3) -> void:
 	_bounce_mult = 1.0
 
 
+## Server-only. Called by the kill plane when this player falls out during a boss
+## fight (see world.gd): freeze the body where it is, drop anything carried, and
+## flip to spectator so they watch a teammate instead of respawning.
+func enter_spectator() -> void:
+	if not multiplayer.is_server() or spectating:
+		return
+	velocity = Vector3.ZERO
+	ragdolled = false
+	_ragdoll_timer = 0.0
+	tumble = 0.0
+	mesh.rotation.x = 0.0
+	if carried_item_path != NodePath(""):
+		var item := get_node_or_null(carried_item_path)
+		if item:
+			item.carried_by = -1
+			item.freeze = false
+		carried_item_path = NodePath("")
+	set_spectating(true)
+
+
+## Server-only. Undo spectator (at the end of the round, before the teleport home).
+func exit_spectator() -> void:
+	if not multiplayer.is_server():
+		return
+	set_spectating(false)
+
+
+## Applies the spectator flag + its visuals. Runs on the server (via
+## enter/exit_spectator) and on every client (via apply_remote_state), so the
+## body vanishes for everyone and the owner swaps cameras.
+func set_spectating(v: bool) -> void:
+	if spectating == v:
+		return
+	spectating = v
+	mesh.visible = not v
+	name_label.visible = not v
+	collision_layer = 0 if v else 2
+	if peer_id == multiplayer.get_unique_id():
+		spectator_cam.current = v
+		camera.current = not v
+		if v:
+			_pick_spec_target()
+
+
+## Living teammates worth watching: other players who aren't themselves out.
+func _spec_candidates() -> Array:
+	var out: Array = []
+	for p in get_tree().get_nodes_in_group("players"):
+		if p == self or p.spectating:
+			continue
+		out.append(p)
+	return out
+
+
+func _pick_spec_target() -> void:
+	var c := _spec_candidates()
+	_spec_target = c[0] if not c.is_empty() else null
+
+
+func _cycle_spec_target() -> void:
+	var c := _spec_candidates()
+	if c.is_empty():
+		_spec_target = null
+		return
+	var i := c.find(_spec_target)
+	_spec_target = c[(i + 1) % c.size()]
+
+
+## Park the spectator camera behind whichever teammate we're watching, using the
+## body facing (which IS synced) for a clean over-the-shoulder chase view.
+func _update_spectator_cam() -> void:
+	if _spec_target == null or not is_instance_valid(_spec_target) or _spec_target.spectating:
+		_pick_spec_target()
+	if _spec_target == null:
+		return
+	var yaw: float = _spec_target.mesh.rotation.y
+	var forward := Vector3(sin(yaw), 0, cos(yaw))
+	var focus: Vector3 = _spec_target.global_position + Vector3(0, 1.2, 0)
+	spectator_cam.global_position = focus - forward * 6.0 + Vector3(0, 2.0, 0)
+	spectator_cam.look_at(focus, Vector3.UP)
+
+
 @rpc("any_peer", "call_local", "reliable")
 func _request_interact() -> void:
 	if not multiplayer.is_server():
@@ -636,6 +745,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	wearing_bunny_ears = state["bunny"]
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
+	set_spectating(state["spec"])
 
 
 func _smooth_to_net_state(delta: float) -> void:

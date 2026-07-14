@@ -148,9 +148,13 @@ audio and minimal feedback.*
 
 ## Phase 4 — Cooperative modes
 
-- [ ] **Goblin Siege / Horde Defense** — goblins (and the promised **troll** as
-      a raid boss) attack a point; players defend together. Reuses goblin AI;
-      closes the "troll planned" and combat threads.
+- [x] **Goblin Siege** — DONE. Skull-on-a-stake starts a co-op round in the boss
+      dungeon: six goblins + a **troll** (6m, club, hardest knockback, shoved
+      not ragdolled) spawn frozen, go live after a 3-2-1 countdown, and hunt
+      everyone on the disc. No HP — you win by ringing the whole horde out into
+      the pit before the ~2.5 min timer; lose if all fighters are knocked out
+      or time expires. Fall out -> spectator chase-cam (cycle teammates), then
+      everyone returns to town. Reward TBD. *(Closes the "troll planned" thread.)*
 - [ ] **The Errand Run** — lean back into the title: a shared checklist under a
       timer (fetch the maze prize, dunk snowballs in the well, clear the cave).
       Turns the map into a coop scavenger hunt.
@@ -172,7 +176,7 @@ audio and minimal feedback.*
 - [ ] **Gem caverns (Level B)** — built but sealed; give it a purpose (a mode
       arena? a coop objective?) or cut it.
 - [ ] **Stone tower interior** — empty; candidate Sumo arena or KotH spot.
-- [ ] **Troll** — promised; lands naturally as the Goblin Siege boss (Phase 4).
+- [x] **Troll** — DONE; landed as the Goblin Siege boss (Phase 4).
 - [ ] **Powers** — currently mutually exclusive novelties; decide their role in
       rounds (pickups? disabled? mode-granted?) vs. hub free-play.
 
