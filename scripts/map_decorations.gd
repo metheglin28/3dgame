@@ -1228,15 +1228,17 @@ func _build_barn() -> void:
 	_add_cylinder(Vector3(-42.0, 1.05, 48.5), 0.45, 0.45, 0.7, hay)
 
 	# The bunny family, middle stall: one mama, three babies. They wander on a
-	# tiny leash, so they stay home; the rail gap lets players walk in and pet
-	# them (they're full NPCs -- snapshot-synced, pettable, and yes, swordable).
+	# tiny leash and are hard-clamped to the stall (see bunny.gd), unhittable
+	# and silent. The mama is the bunny-ears power granter; the rail gap lets
+	# players walk in to her.
 	var family := [
 		[-47.8, 44.6, 1.15], [-47.15, 45.35, 0.7], [-48.05, 45.5, 0.7], [-47.3, 44.1, 0.7],
 	]
-	for b in family:
+	for i in range(family.size()):
 		var bunny := BUNNY_SCENE.instantiate()
-		bunny.position = Vector3(b[0], 0.02, b[1])
-		bunny.bunny_scale = b[2]
+		bunny.position = Vector3(family[i][0], 0.02, family[i][1])
+		bunny.bunny_scale = family[i][2]
+		bunny.is_mama = i == 0
 		add_child(bunny)
 
 

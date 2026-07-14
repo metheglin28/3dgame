@@ -139,7 +139,7 @@ same ranges the sliders allow.
   town in the center — houses, a shop, a well, lampposts, signposts — and a
   distinct biome in each quadrant: a forest (NE), a farm with a barn and
   silo (NW — the barn is enterable: three hay stalls inside, one home to a
-  pettable family of bunnies), a hand-designed canyon maze with a prize at its dead end (SE),
+  family of bunnies; the mama is where you borrow the bunny-ear headband), a hand-designed canyon maze with a prize at its dead end (SE),
   and snowy hills with a snowman (SW). All layout lives in
   `scripts/map_decorations.gd` as literal coordinates — tweak numbers there
   to move things around.
