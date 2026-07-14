@@ -1033,6 +1033,11 @@ func _build_dungeon() -> void:
 		Vector3(gx, LEVEL_A_Y + 0.02, cz),                          # west face of the gate cell (opens into the tunnel room)
 		Vector3(cx - DUNGEON_INNER_R, DUNGEON_ARENA_Y + 0.02, cz),  # dungeon inner wall face, down at arena depth
 	], 2.2, 3.8)
+	# Torches down the descent (floor drops ~0.73/m along x) -- without them the
+	# 15m ramp is pitch black.
+	_add_torch(Vector3(55, -5.0, cz + 0.9))
+	_add_torch(Vector3(60, -8.6, cz - 0.9))
+	_add_torch(Vector3(65, -12.3, cz + 0.9))
 
 	# Light the place: a bright cool source high over the arena, a dimmer one down
 	# in the pit, and a ring of torches around the disc edge.
@@ -1323,8 +1328,12 @@ func _build_tunnels() -> void:
 	var ceil_holes: Array = []
 	for biome in ENTRANCE_SHAFTS:
 		ceil_holes.append(_entrance_trench(biome))
-	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, [],
-		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL], ceil_holes)
+	# The dungeon corridor RAMPS DOWN through its gate cell (unlike the tower's
+	# flat corridor), so besides skipping the gate cell's rock, the Level A
+	# floor slab needs a hole there for the descent to pass through -- the
+	# corridor's own floor/walls/plugs reseal every edge of the cut.
+	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, [Vector2(55.5, 40)],
+		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL, DUNGEON_GATE_CELL], ceil_holes)
 	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [],
 		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true)
 
