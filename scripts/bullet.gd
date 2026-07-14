@@ -13,6 +13,11 @@ const KNOCKBACK := 16.0  # the sword is 11; getting shot means getting LAUNCHED
 
 var shooter_id: int = -1
 
+# Direction of travel, sampled every physics frame BEFORE the physics step --
+# body_entered fires after the collision is resolved, by which time
+# linear_velocity has bounced/slid and can point anywhere (see lightning.gd).
+var _travel: Vector3 = Vector3.ZERO
+
 var _net_xform_target: Transform3D
 var _has_net_state := false
 const NET_SMOOTH_RATE := 22.0
@@ -40,6 +45,11 @@ func _process(delta: float) -> void:
 	global_transform = global_transform.interpolate_with(_net_xform_target, w)
 
 
+func _physics_process(_delta: float) -> void:
+	if multiplayer.is_server() and linear_velocity.length_squared() > 1.0:
+		_travel = linear_velocity
+
+
 ## Server-only: start just ahead of the shooter (clear of their own capsule)
 ## and fly flat along their aim.
 func launch_from(shooter: Node3D) -> void:
@@ -47,6 +57,7 @@ func launch_from(shooter: Node3D) -> void:
 	var aim: Vector3 = shooter.look_direction()
 	global_position = shooter.hold_point.global_position + aim * 0.6
 	linear_velocity = aim * MUZZLE_SPEED
+	_travel = linear_velocity
 
 
 func _on_body_entered(body: Node) -> void:
@@ -55,7 +66,9 @@ func _on_body_entered(body: Node) -> void:
 	if body is CharacterBody3D and "peer_id" in body and body.peer_id == shooter_id:
 		return # don't shoot yourself in the foot at the muzzle
 	if body.has_method("apply_knockback"):
-		var dir := (linear_velocity * Vector3(1, 0, 1)).normalized()
+		var dir := (_travel * Vector3(1, 0, 1)).normalized()
+		if not dir.is_finite() or dir.length_squared() < 0.5:
+			dir = ((body.global_position - global_position) * Vector3(1, 0, 1)).normalized()
 		body.apply_knockback(dir, KNOCKBACK)
 	queue_free()
 
