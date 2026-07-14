@@ -136,6 +136,10 @@ const SLOW_MULT := 0.55         # 45% slower
 # (the orange player) read cool rather than merely washed out.
 const FROST_COLOR := Color(0.5, 0.7, 1.0)
 const FROST_BLEND := 0.45
+# Dark bodies (the troll) would otherwise LIGHTEN dramatically under the blend;
+# cap the frost target's brightness at 1.5x the target's own luminance so the
+# chill cools everyone by a comparable amount instead.
+const FROST_MAX_BRIGHTEN := 1.5
 var _push_timer := 0.0
 var _slow_timer := 0.0
 var _slow_tinted := false
@@ -615,7 +619,12 @@ func set_slow_tint(v: bool) -> void:
 		if base is StandardMaterial3D:
 			frost = (base as StandardMaterial3D).duplicate()
 			var c: Color = frost.albedo_color
-			var cold := c.lerp(FROST_COLOR, FROST_BLEND)
+			var frost_target := FROST_COLOR
+			var frost_lum := FROST_COLOR.get_luminance()
+			if frost_lum > c.get_luminance() * FROST_MAX_BRIGHTEN:
+				frost_target = FROST_COLOR * (c.get_luminance() * FROST_MAX_BRIGHTEN / frost_lum)
+				frost_target.a = 1.0
+			var cold := c.lerp(frost_target, FROST_BLEND)
 			cold.b = maxf(cold.b, cold.r * 0.95)
 			frost.albedo_color = Color(cold, c.a)
 		else:
