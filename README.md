@@ -144,6 +144,19 @@ same ranges the sliders allow.
   level (a gap punched through the tunnel's west wall). The interior is one
   big empty room for now, deliberately left undesigned — plenty of elbow
   room to build into later.
+- **A boss dungeon** buried in the void *east* of the map — the tower's
+  mirror image, and the future arena for a co-op mode. One massive
+  cylindrical room, ~48m across and nearly 40m tall, reached only by a
+  corridor off the first underground level under the forest quadrant (drop
+  into the forest entrance shaft, head a few steps east). You enter at floor
+  level, stepping across a short bridge onto a raised central arena disc;
+  between the disc and the outer wall is a wide ring of open air with a long
+  drop into a pit, so players and enemies can be knocked clean *off* the
+  arena, sumo-style. The whole structure sits below ground with its roof
+  just under grade, so surface players never see it. Right now it's
+  **geometry only** — the "fell out of bounds" behavior (elimination /
+  respawn) and the mode rules come later; for now the pit just has a floor
+  at the bottom.
 
 ## Project layout
 

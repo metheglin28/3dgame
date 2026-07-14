@@ -125,6 +125,30 @@ const TOWER_SEGMENTS := 16
 const TOWER_GATE_CELL := Vector2i(0, 19) # Level A rock cell the corridor pierces
 const TOWER_ROOF_COLOR := Color(0.3, 0.34, 0.45, 1)
 
+## The boss dungeon: a huge cylindrical room buried in the void EAST of the map
+## (mirror of the tower), reached ONLY by a corridor from tunnel Level A under
+## the forest quadrant. It's a sumo-style arena -- a raised central floor disc
+## with an open pit ring between the disc edge and the walls, so players and
+## enemies can be knocked clean off the arena. The whole structure sits BELOW
+## grade (roof just under y=0) so nothing pokes up where surface players could
+## see it. You enter at floor level: the corridor descends and arrives right on
+## the arena disc via a short bridge across the pit. The out-of-bounds/respawn
+## behaviour is deliberately NOT built yet -- this is geometry only; the pit has
+## a catch floor at the bottom for now. The mode mechanics come later.
+const DUNGEON_CENTER := Vector2(92, 40)
+const DUNGEON_INNER_R := 24.0      # inner wall radius: ~48m across ("very wide")
+const DUNGEON_WALL_T := 1.6
+const DUNGEON_SEGMENTS := 32        # a 32-gon reads as a smooth cylinder here
+const DUNGEON_ARENA_R := 15.0      # raised central floor disc
+const DUNGEON_ARENA_Y := -16.0     # arena floor depth (corridor descends to it)
+const DUNGEON_CEIL_Y := -1.0       # roof, kept just below grade so it stays hidden
+const DUNGEON_PIT_Y := -40.0       # catch floor far below the disc ("very tall")
+const DUNGEON_GATE_CELL := Vector2i(22, 19) # east Level A wall cell the corridor pierces
+const DUNGEON_ROCK := Color(0.26, 0.24, 0.28, 1)
+const DUNGEON_FLOOR := Color(0.3, 0.28, 0.32, 1)
+const DUNGEON_CEILING_COLOR := Color(0.12, 0.11, 0.14, 1)
+const DUNGEON_PIT_COLOR := Color(0.07, 0.06, 0.09, 1)
+
 const LEVEL_A_ORIGIN := Vector2(-57.5, -57.5)
 const LEVEL_A_ROWS: Array[String] = [
 	"#.#.#####.###.#.#.#.#.#",
@@ -210,6 +234,7 @@ func _ready() -> void:
 	_build_ground_collision()
 	_build_tunnels()
 	_build_tower()
+	_build_dungeon()
 
 
 # --- primitive helpers --------------------------------------------------------
@@ -939,6 +964,85 @@ func _build_tower() -> void:
 	# A pair of torches inside so the big empty room isn't pitch black.
 	_add_torch(Vector3(cx + 5.5, LEVEL_A_Y + 2.2, cz + 1.8))
 	_add_torch(Vector3(cx + 5.5, LEVEL_A_Y + 2.2, cz - 1.8))
+
+
+# --- the boss dungeon (buried in the void east of the forest) -------------------
+
+func _build_dungeon() -> void:
+	var cx := DUNGEON_CENTER.x
+	var cz := DUNGEON_CENTER.y
+	var wall_r := DUNGEON_INNER_R + DUNGEON_WALL_T * 0.5
+	var wall_top := DUNGEON_CEIL_Y
+	var wall_bottom := DUNGEON_PIT_Y - 1.0
+	var wall_h := wall_top - wall_bottom
+	# The shell: a ring of thick box segments, same trick as the tower (a many-
+	# sided polygon reads as a cylinder, and thick boxes can't blind a clipping
+	# camera the way a thin tube would). The segment facing WEST -- toward the
+	# corridor from Level A -- is skipped for the doorway and re-plugged around
+	# the corridor opening below.
+	var chord := 2.0 * wall_r * sin(PI / DUNGEON_SEGMENTS) + 0.2
+	var door_seg := DUNGEON_SEGMENTS / 2  # angle PI => faces -x (west)
+	for i in range(DUNGEON_SEGMENTS):
+		if i == door_seg:
+			continue
+		var ang := TAU * float(i) / DUNGEON_SEGMENTS
+		var pos := Vector3(cx + cos(ang) * wall_r, (wall_top + wall_bottom) * 0.5, cz + sin(ang) * wall_r)
+		_add_yaw_box(pos, Vector3(DUNGEON_WALL_T, wall_h, chord), -ang, DUNGEON_ROCK)
+
+	# Refill the doorway wall above the corridor roof and below its floor, so the
+	# skipped segment becomes a doorway-shaped hole rather than a full slot.
+	var door_x := cx - wall_r
+	var plug_bottom := DUNGEON_ARENA_Y + 4.2   # clears the ~3.8m corridor roof
+	_add_box(Vector3(door_x, (plug_bottom + wall_top) * 0.5, cz), Vector3(DUNGEON_WALL_T, wall_top - plug_bottom, chord + 0.3), DUNGEON_ROCK)
+	var sill_top := DUNGEON_ARENA_Y - 0.2
+	_add_box(Vector3(door_x, (wall_bottom + sill_top) * 0.5, cz), Vector3(DUNGEON_WALL_T, sill_top - wall_bottom, chord + 0.3), DUNGEON_ROCK)
+
+	# Raised central arena disc (solid, collidable) + the catch floor at the very
+	# bottom of the pit. Between the disc edge (r=15) and the wall (r=24) is a 9m
+	# ring of open air with nothing at disc height -- the "fall out of bounds" gap.
+	_add_cylinder(Vector3(cx, DUNGEON_ARENA_Y - 0.2, cz), DUNGEON_ARENA_R, DUNGEON_ARENA_R, 0.4, DUNGEON_FLOOR)
+	_add_cylinder(Vector3(cx, DUNGEON_PIT_Y - 0.2, cz), DUNGEON_INNER_R, DUNGEON_INNER_R, 0.4, DUNGEON_PIT_COLOR)
+
+	# The one crossing from the doorway to the disc: a narrow bridge over the pit,
+	# so you enter at floor level and step straight onto the arena.
+	var bx0 := cx - DUNGEON_INNER_R - 1.0   # tucked into the doorway
+	var bx1 := cx - DUNGEON_ARENA_R + 1.5   # overlapping the disc
+	_add_box(Vector3((bx0 + bx1) * 0.5, DUNGEON_ARENA_Y - 0.15, cz), Vector3(bx1 - bx0, 0.3, 3.6), DUNGEON_FLOOR)
+
+	# Roof: a flat disc just under grade, non-colliding (nothing can reach it),
+	# capping the room so surface players never see in.
+	_add_cylinder(Vector3(cx, DUNGEON_CEIL_Y + 0.15, cz), DUNGEON_INNER_R + 3.0, DUNGEON_INNER_R + 3.0, 0.3, DUNGEON_CEILING_COLOR, false)
+
+	# The gate: refill the pierced Level A rock cell around a corridor-sized hole
+	# (side strips + a header), then run the corridor from the neighbouring tunnel
+	# room east into the dungeon, descending to the arena floor as it goes.
+	var gx := LEVEL_A_ORIGIN.x + DUNGEON_GATE_CELL.x * TUNNEL_CELL
+	var gz := LEVEL_A_ORIGIN.y + DUNGEON_GATE_CELL.y * TUNNEL_CELL
+	_add_box(Vector3(gx + 2.5, LEVEL_A_Y + 2.0, gz + 0.7), Vector3(5, 4, 1.4), TUNNEL_ROCK)
+	_add_box(Vector3(gx + 2.5, LEVEL_A_Y + 2.0, gz + 4.3), Vector3(5, 4, 1.4), TUNNEL_ROCK)
+	_add_box(Vector3(gx + 2.5, LEVEL_A_Y + 3.8, gz + 2.5), Vector3(5, 0.4, 4.6), TUNNEL_ROCK)
+	_add_corridor([
+		Vector3(gx, LEVEL_A_Y + 0.02, cz),                          # west face of the gate cell (opens into the tunnel room)
+		Vector3(cx - DUNGEON_INNER_R, DUNGEON_ARENA_Y + 0.02, cz),  # dungeon inner wall face, down at arena depth
+	], 2.2, 3.8)
+
+	# Light the place: a bright cool source high over the arena, a dimmer one down
+	# in the pit, and a ring of torches around the disc edge.
+	var key := OmniLight3D.new()
+	key.position = Vector3(cx, DUNGEON_ARENA_Y + 9.0, cz)
+	key.light_color = Color(0.82, 0.86, 1.0)
+	key.light_energy = 2.2
+	key.omni_range = 44.0
+	add_child(key)
+	var deep := OmniLight3D.new()
+	deep.position = Vector3(cx, DUNGEON_PIT_Y + 4.0, cz)
+	deep.light_color = Color(0.5, 0.45, 0.7)
+	deep.light_energy = 1.2
+	deep.omni_range = 30.0
+	add_child(deep)
+	for k in range(8):
+		var a := TAU * float(k) / 8.0
+		_add_torch(Vector3(cx + cos(a) * (DUNGEON_ARENA_R - 1.3), DUNGEON_ARENA_Y + 0.3, cz + sin(a) * (DUNGEON_ARENA_R - 1.3)))
 
 
 ## A box rotated around Y (mesh + collision) -- the tower's wall segments
