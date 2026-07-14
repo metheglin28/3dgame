@@ -322,31 +322,43 @@ func _add_sphere(pos: Vector3, radius: float, color: Color, collide: bool = true
 		body.add_child(col)
 
 
-## A snow mound: the VISUAL is a sphere sunk into the ground, but the COLLIDER
-## is a convex hull of only the above-ground dome (plus a short skirt below the
-## rim so the hull meets the ground with a wall, not a knife edge). A plain
-## sphere collider here would silently extend r*1.55 meters underground --
-## straight into the tunnel network, blocking corridors with invisible round
-## walls, and one mound reached right into the snow entrance shaft.
+## A snow mound: a hemispherical dome sitting ON the ground -- nothing of it
+## (visual or collider) exists below grade, because the tunnel network runs
+## right underneath the snow quadrant and anything sunk below y=0 pokes
+## through tunnel ceilings as giant white sphere chunks. (This was originally
+## a sphere sunk 0.55r into the ground: the collider got fixed to an
+## above-ground hull first, and the visual is now a matching dome.) The dome
+## reproduces the old sunk-sphere silhouette: rim radius 0.835r at grade,
+## crest 0.45r high, so the hills look identical from the surface.
 func _add_mound(x: float, z: float, r: float) -> void:
-	var sink := r * 0.55
-	_add_sphere(Vector3(x, -sink, z), r, SNOW_WHITE, false)
+	var dome_r := r * 0.8352  # rim radius: r*cos(asin(0.55)), the old cap's footprint
+	var dome_h := r * 0.45    # crest height: r - sink
+	var mesh := MeshInstance3D.new()
+	var hemi := SphereMesh.new()
+	hemi.radius = dome_r
+	hemi.height = dome_h * 2.0 # full-ellipsoid height; the hemisphere shows the top half
+	hemi.is_hemisphere = true
+	mesh.mesh = hemi
+	mesh.position = Vector3(x, 0.0, z)
+	mesh.material_override = _make_material(SNOW_WHITE)
+	add_child(mesh)
 	var body := StaticBody3D.new()
-	body.position = Vector3(x, -sink, z)
+	body.position = Vector3(x, 0.0, z)
 	body.collision_layer = 1
 	add_child(body)
+	# Hull rings follow the same dome profile as the visual (plus a short skirt
+	# below the rim so the hull meets the ground with a wall, not a knife edge).
 	var pts := PackedVector3Array()
-	var lat0 := asin(sink / r) # latitude (in body-local space) of the ground plane
 	var segs := 12
 	for ring in range(4):
-		var lat := lerpf(lat0, PI * 0.5, float(ring) / 4.0)
+		var t := lerpf(0.0, PI * 0.5, float(ring) / 4.0)
 		for k in range(segs):
 			var a := TAU * float(k) / segs
-			pts.append(Vector3(cos(a) * r * cos(lat), r * sin(lat), sin(a) * r * cos(lat)))
-	pts.append(Vector3(0, r, 0))
+			pts.append(Vector3(cos(a) * dome_r * cos(t), dome_h * sin(t), sin(a) * dome_r * cos(t)))
+	pts.append(Vector3(0, dome_h, 0))
 	for k in range(segs):
 		var a := TAU * float(k) / segs
-		pts.append(Vector3(cos(a) * r * cos(lat0), sink - 0.3, sin(a) * r * cos(lat0)))
+		pts.append(Vector3(cos(a) * dome_r, -0.3, sin(a) * dome_r))
 	var shape := ConvexPolygonShape3D.new()
 	shape.points = pts
 	var col := CollisionShape3D.new()
