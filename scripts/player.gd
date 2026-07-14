@@ -296,6 +296,9 @@ func _process(delta: float) -> void:
 ## Draws the King of the Hill banner/scoreboard from the synced GameDirector
 ## state (local player only). Plain text keeps the HUD change tiny.
 func _update_round_hud() -> void:
+	if GameDirector.mode == GameDirector.Mode.BOSS:
+		_update_boss_hud()
+		return
 	match GameDirector.state:
 		GameDirector.HUB:
 			if GameDirector.session_wins.is_empty():
@@ -314,6 +317,22 @@ func _update_round_hud() -> void:
 			if GameDirector.last_winner != -1:
 				w = str(NetworkManager.player_names.get(GameDirector.last_winner, "?"))
 			round_label.text = "%s wins the round!\n" % w + _score_lines()
+
+
+## The Goblin Siege banner. Enemies-left is counted locally from the replicated
+## arena_enemy group (works on every peer). Win/lose result text lands in a later
+## stage; for now ROUND_END just says the siege is over.
+func _update_boss_hud() -> void:
+	var enemies := get_tree().get_nodes_in_group("arena_enemy").size()
+	match GameDirector.state:
+		GameDirector.HUB:
+			round_label.text = ""
+		GameDirector.COUNTDOWN:
+			round_label.text = "GOBLIN SIEGE\nbrace yourself!  %d" % ceili(GameDirector.timer)
+		GameDirector.PLAYING:
+			round_label.text = "%s   Enemies left: %d" % [_clock(GameDirector.timer), enemies]
+		GameDirector.ROUND_END:
+			round_label.text = "The siege is over."
 
 
 func _clock(t: float) -> String:

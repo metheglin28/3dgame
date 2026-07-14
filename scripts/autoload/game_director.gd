@@ -13,6 +13,12 @@ extends Node
 signal state_changed(new_state: int)
 
 enum { HUB, COUNTDOWN, PLAYING, ROUND_END }
+## Which game the current round is. KotH is the hub control-point game; BOSS is
+## the co-op Goblin Siege in the dungeon arena (enemies spawned by the World on
+## the COUNTDOWN/PLAYING/ROUND_END transitions). The round state machine and
+## timer below are shared; `mode` just picks what PLAYING actually does and what
+## the HUD/marker show.
+enum Mode { KOTH, BOSS }
 
 const ROUND_TIME := 150.0   # 2.5 minutes of play
 const COUNTDOWN_TIME := 3.0
@@ -30,6 +36,7 @@ const HILL_SPOTS: Array[Vector3] = [
 ]
 
 var state: int = HUB
+var mode: int = Mode.KOTH
 var timer: float = 0.0             # counts down within COUNTDOWN/PLAYING/ROUND_END
 var hill_index: int = -1
 var hill_center: Vector3 = Vector3.ZERO
@@ -43,6 +50,7 @@ var _marker: Node3D = null
 
 func reset_session() -> void:
 	state = HUB
+	mode = Mode.KOTH
 	king_id = -1
 	control_time.clear()
 	session_wins.clear()
@@ -55,8 +63,22 @@ func reset_session() -> void:
 func start_round() -> void:
 	if not multiplayer.is_server() or state != HUB:
 		return
+	mode = Mode.KOTH
 	hill_index = (hill_index + 1) % HILL_SPOTS.size()
 	hill_center = HILL_SPOTS[hill_index]
+	control_time.clear()
+	king_id = -1
+	timer = COUNTDOWN_TIME
+	_set_state(COUNTDOWN)
+
+
+## Server-only. Called by the skull-on-a-stake just past the arena entrance (see
+## skull_stake.gd). Kicks off the co-op Goblin Siege: the World spawns the frozen
+## enemy wave when we enter COUNTDOWN and turns it loose at PLAYING.
+func start_boss_fight() -> void:
+	if not multiplayer.is_server() or state != HUB:
+		return
+	mode = Mode.BOSS
 	control_time.clear()
 	king_id = -1
 	timer = COUNTDOWN_TIME
@@ -72,7 +94,8 @@ func tick(delta: float) -> void:
 				timer = ROUND_TIME
 				_set_state(PLAYING)
 		PLAYING:
-			_update_king(delta)
+			if mode == Mode.KOTH:
+				_update_king(delta)
 			timer -= delta
 			if timer <= 0.0:
 				_finish_round()
@@ -120,7 +143,7 @@ func _set_state(s: int) -> void:
 
 func net_state() -> Dictionary:
 	return {
-		"st": state, "t": timer, "hill": hill_center, "king": king_id,
+		"st": state, "md": mode, "t": timer, "hill": hill_center, "king": king_id,
 		"ctrl": control_time.duplicate(), "wins": session_wins.duplicate(),
 		"win": last_winner,
 	}
@@ -129,6 +152,7 @@ func net_state() -> Dictionary:
 func apply_net_state(d: Dictionary) -> void:
 	# Clients mirror the server's round state for HUD + marker.
 	state = d["st"]
+	mode = d["md"]
 	timer = d["t"]
 	hill_center = d["hill"]
 	king_id = d["king"]
@@ -140,7 +164,8 @@ func apply_net_state(d: Dictionary) -> void:
 ## --- the hill marker (local visual on every peer, driven by hill_center) ---
 
 func _process(_delta: float) -> void:
-	var show := state == COUNTDOWN or state == PLAYING
+	# Only KotH has a hill ring; the boss fight has no marker.
+	var show := mode == Mode.KOTH and (state == COUNTDOWN or state == PLAYING)
 	if show and _marker == null:
 		_marker = _make_marker()
 		add_child(_marker)

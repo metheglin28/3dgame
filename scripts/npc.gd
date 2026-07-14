@@ -52,6 +52,11 @@ var _ragdolled := false
 var _ragdoll_timer := 0.0
 var _hit_immunity := 0.0
 
+# Frozen: used by the boss round's countdown -- the spawned wave stands still and
+# intangible (collision off) until the fight goes live. Server-side only; clients
+# just render the (unmoving) snapshot position.
+var frozen := false
+
 # Latest server snapshot, smoothed toward in _process on non-server peers.
 var _net_pos_target: Vector3
 var _net_rot_target := 0.0
@@ -91,10 +96,18 @@ func get_interact_prompt() -> String:
 ## varying knockback" plugs in. Launches up-and-away, cuts AI control until
 ## they've landed and the timer has run out. A short immunity window stops a
 ## flying NPC being juggled indefinitely.
+## Server-side freeze toggle for the boss countdown: turn collision off so
+## players pass through, and (via _physics_process) hold still. Restores the
+## scene's collision layer (8) when the fight goes live.
+func set_frozen(v: bool) -> void:
+	frozen = v
+	collision_layer = 0 if v else 8
+
+
 func apply_knockback(dir: Vector3, power: float) -> void:
 	if not multiplayer.is_server():
 		return
-	if _hit_immunity > 0.0:
+	if frozen or _hit_immunity > 0.0:
 		return
 	_hit_immunity = HIT_IMMUNITY
 	_ragdolled = true
@@ -104,6 +117,9 @@ func apply_knockback(dir: Vector3, power: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if frozen:
+		velocity = Vector3.ZERO
+		return
 	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta

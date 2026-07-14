@@ -8,6 +8,16 @@ extends Node3D
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const SNOWBALL_SCENE := preload("res://scenes/snowball.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
+const GOBLIN_SCENE := preload("res://scenes/goblin.tscn")
+
+# The co-op Goblin Siege wave, spawned onto the dungeon arena disc when a boss
+# round starts (see GameDirector). Six goblins for now; the troll joins in a
+# later stage. Skins reuse the cave goblins' palette.
+const ARENA_CENTER := Vector3(92, -15.5, 40) # just above the disc top (y=-16)
+const BOSS_GOBLIN_SKINS: Array[Color] = [
+	Color(0.65, 0.68, 0.28), Color(0.52, 0.6, 0.22), Color(0.42, 0.58, 0.24),
+	Color(0.33, 0.5, 0.22), Color(0.22, 0.36, 0.16), Color(0.6, 0.66, 0.3),
+]
 
 # Kill plane. The only thing on the whole map that sits below this is the boss
 # dungeon's pit (arena disc at y=-16, catch floor at y=-40), so in practice this
@@ -28,6 +38,12 @@ var projectiles_node: Node3D
 var projectile_spawner: MultiplayerSpawner
 var _next_projectile_id: int = 0
 
+# Arena enemies (Goblin Siege) are also spawned dynamically, through their own
+# spawner so late joiners replicate them and freeing on the server auto-despawns
+# them on clients.
+var enemies_node: Node3D
+var enemy_spawner: MultiplayerSpawner
+
 
 func _ready() -> void:
 	spawner.spawn_function = _spawn_player
@@ -39,6 +55,18 @@ func _ready() -> void:
 	projectile_spawner.spawn_path = projectiles_node.get_path()
 	projectile_spawner.spawn_function = _spawn_projectile
 	projectiles_node.add_child(projectile_spawner)
+
+	enemies_node = Node3D.new()
+	enemies_node.name = "Enemies"
+	add_child(enemies_node)
+	enemy_spawner = MultiplayerSpawner.new()
+	enemy_spawner.spawn_path = enemies_node.get_path()
+	enemy_spawner.spawn_function = _spawn_enemy
+	enemies_node.add_child(enemy_spawner)
+
+	# The director drives the boss wave: spawn frozen on COUNTDOWN, turn loose on
+	# PLAYING, clean up on ROUND_END. state_changed only ever fires on the server.
+	GameDirector.state_changed.connect(_on_director_state)
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -142,7 +170,12 @@ func _enforce_kill_plane() -> void:
 		if npc.is_queued_for_deletion():
 			continue
 		if npc.global_position.y < KILL_PLANE_Y:
-			_remove_node.rpc(npc.get_path())
+			if npc.is_in_group("arena_enemy"):
+				# Spawner-managed: a server-side free auto-despawns it on clients.
+				npc.queue_free()
+			else:
+				# A static scene NPC lives on every peer; free it everywhere.
+				_remove_node.rpc(npc.get_path())
 
 
 ## A random town spawn marker's position (same set the game spawns players at).
@@ -161,6 +194,52 @@ func _remove_node(path: NodePath) -> void:
 	var n := get_node_or_null(path)
 	if n:
 		n.queue_free()
+
+
+## --- Goblin Siege boss wave (server-only; wired to GameDirector) -----------
+
+func _on_director_state(new_state: int) -> void:
+	if not multiplayer.is_server() or GameDirector.mode != GameDirector.Mode.BOSS:
+		return
+	match new_state:
+		GameDirector.COUNTDOWN:
+			_spawn_boss_wave()
+		GameDirector.PLAYING:
+			_set_enemies_frozen(false)
+		GameDirector.ROUND_END:
+			_despawn_boss_wave()
+
+
+## Spawn the enemy wave onto the arena disc, frozen until the countdown ends.
+## Goblins ring the disc; the troll (center) arrives in a later stage.
+func _spawn_boss_wave() -> void:
+	for i in range(BOSS_GOBLIN_SKINS.size()):
+		var a := TAU * float(i) / float(BOSS_GOBLIN_SKINS.size())
+		var pos := ARENA_CENTER + Vector3(cos(a) * 8.0, 0, sin(a) * 8.0)
+		enemy_spawner.spawn({"kind": "goblin", "idx": i, "pos": pos})
+
+
+func _spawn_enemy(data: Dictionary) -> Node:
+	var idx := int(data["idx"])
+	var e := GOBLIN_SCENE.instantiate()
+	e.name = "Enemy%d" % idx
+	e.arena_mode = true
+	e.skin_color = BOSS_GOBLIN_SKINS[idx % BOSS_GOBLIN_SKINS.size()]
+	e.npc_name = "Goblin"
+	e.position = data["pos"]
+	e.add_to_group("arena_enemy")
+	e.set_frozen(true)
+	return e
+
+
+func _set_enemies_frozen(v: bool) -> void:
+	for e in get_tree().get_nodes_in_group("arena_enemy"):
+		e.set_frozen(v)
+
+
+func _despawn_boss_wave() -> void:
+	for e in get_tree().get_nodes_in_group("arena_enemy"):
+		e.queue_free()
 
 
 ## Called by a player (server-side only, see player.gd's _request_throw) to

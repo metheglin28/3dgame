@@ -23,6 +23,7 @@ const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
 const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
 const CHEST_SCENE := preload("res://scenes/chest.tscn")
 const CROWN_SCENE := preload("res://scenes/crown.tscn")
+const SKULL_STAKE_SCENE := preload("res://scenes/skull_stake.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -1043,6 +1044,12 @@ func _build_dungeon() -> void:
 	for k in range(8):
 		var a := TAU * float(k) / 8.0
 		_add_torch(Vector3(cx + cos(a) * (DUNGEON_ARENA_R - 1.3), DUNGEON_ARENA_Y + 0.3, cz + sin(a) * (DUNGEON_ARENA_R - 1.3)))
+
+	# The activation node: a goblin skull on a stake, planted just past where the
+	# entrance bridge meets the disc. Interact to start the co-op Goblin Siege.
+	var skull := SKULL_STAKE_SCENE.instantiate()
+	skull.position = Vector3(cx - DUNGEON_ARENA_R + 4.0, DUNGEON_ARENA_Y, cz)
+	add_child(skull)
 
 
 ## A box rotated around Y (mesh + collision) -- the tower's wall segments

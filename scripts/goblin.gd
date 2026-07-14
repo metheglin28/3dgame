@@ -31,7 +31,15 @@ const CAVE_BOXES: Array[AABB] = [
 	AABB(Vector3(36.4, -10, 92.5), Vector3(6, 8, 5.5)),  # loot room
 ]
 
+## The boss dungeon arena (disc center + radius, see map_decorations DUNGEON_*).
+## In arena_mode the goblin forgets the cave entirely: it hunts whoever is on the
+## disc and leashes to the disc instead of the warren.
+const ARENA_CENTER := Vector3(92, -16, 40)
+const ARENA_RADIUS := 15.0
+const ARENA_AGGRO := 40.0  # the whole disc -- no dawdling once the fight is on
+
 @export var skin_color: Color = Color(0.38, 0.55, 0.22)
+@export var arena_mode := false
 
 @onready var dagger: Node3D = $Mesh/DaggerPivot
 
@@ -56,11 +64,15 @@ static func is_in_cave(p: Vector3) -> bool:
 
 func _ai(delta: float) -> void:
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
-	# Knocked (or wandered) out of the cave somehow? Head home first.
-	if not is_in_cave(global_position):
-		super(delta)
-		return
-	var prey := _find_prey()
+	var prey: Node3D
+	if arena_mode:
+		prey = _find_arena_prey()
+	else:
+		# Knocked (or wandered) out of the cave somehow? Head home first.
+		if not is_in_cave(global_position):
+			super(delta)
+			return
+		prey = _find_prey()
 	if prey == null:
 		super(delta)
 		return
@@ -87,6 +99,26 @@ func _find_prey() -> Node3D:
 	var best_dist := AGGRO_RANGE
 	for p in get_tree().get_nodes_in_group("players"):
 		if not is_in_cave(p.global_position):
+			continue
+		var d := global_position.distance_to(p.global_position)
+		if d < best_dist:
+			best_dist = d
+			best = p
+	return best
+
+
+## Is this position on (or just over) the arena disc, and not down the pit?
+static func _in_arena(p: Vector3) -> bool:
+	return Vector2(p.x - ARENA_CENTER.x, p.z - ARENA_CENTER.z).length() < ARENA_RADIUS + 2.0 and p.y > -30.0
+
+
+## Nearest player still up on the arena disc (fallen/spectating players, who are
+## down the pit or gone, drop out of the group and this check naturally).
+func _find_arena_prey() -> Node3D:
+	var best: Node3D = null
+	var best_dist := ARENA_AGGRO
+	for p in get_tree().get_nodes_in_group("players"):
+		if not _in_arena(p.global_position):
 			continue
 		var d := global_position.distance_to(p.global_position)
 		if d < best_dist:
