@@ -88,8 +88,12 @@ same ranges the sliders allow.
   you're close by, so you're not reading every name across the whole map. The
   same goes for signpost text.
 - **A snowman in the snowy hills** who'll grant you a snowball hat if you talk
-  to him — while you're wearing it, click to lob snowballs instead of your
-  hands staying empty. Talk to him again to take it off.
+  to him — while you're wearing it, click to lob snowballs (talk to him again
+  to take it off). Snowballs are proper projectiles: they arc, pop in a puff
+  of flecks on the first thing they touch, and hit as hard as the wizard's
+  lightning — but as a shove (no ragdoll, troll-style) plus a **chill**: the
+  target moves 45% slower for 2.5 s and turns frost-blue so everyone can see
+  it. Works on players, goblins, and — usefully — the troll.
 - **A sword in a stone** in the forest clearing — pull it to don a knight
   helmet and a sword; while you have it, click to swing, which knocks nearby
   props (and snowballs) flying. Interact again to put it back.

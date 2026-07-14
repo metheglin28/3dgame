@@ -66,6 +66,11 @@ var wearing_cowboy_hat: bool = false:
 var _shoot_cooldown: float = 0.0
 const SHOOT_COOLDOWN := 0.55
 
+# Server-side snowball-throw rate limit -- the snowball used to be harmless so
+# it had none; now that it shoves and slows, spam needs a cap.
+var _throw_ball_cooldown: float = 0.0
+const THROW_BALL_COOLDOWN := 0.5
+
 ## Bunny-ears power, granted at the goblin cave's treasure chest (see
 ## chest.gd). While worn, your base jump is 1.5x, and every consecutive
 ## bounce (re-jumping the instant you land) stacks another BOUNCE_STEP on top,
@@ -118,6 +123,18 @@ var _hit_immunity := 0.0
 const RAGDOLL_MIN_TIME := 1.1
 const HIT_IMMUNITY := 0.8
 const TUMBLE_SPEED := 9.0
+
+# Shove (snowball hit): a brief no-control push -- no tumble, no immunity,
+# same feel as shoving the troll. Slow (also the snowball): movement scaled
+# down for a few seconds, shown to everyone as a frost-blue body tint (the
+# `slow` flag rides the per-player snapshot).
+const SHOVE_SCALE := 0.6
+const SHOVE_TIME := 0.35
+const SLOW_MULT := 0.55       # 45% slower
+var _push_timer := 0.0
+var _slow_timer := 0.0
+var _slow_tinted := false
+var _pre_slow_material: Material = null
 
 # Input latched by the owning client, applied by the server.
 var _pending_move: Vector2 = Vector2.ZERO
@@ -415,7 +432,10 @@ func _physics_process(delta: float) -> void:
 	_swing_cooldown = maxf(_swing_cooldown - delta, 0.0)
 	_shoot_cooldown = maxf(_shoot_cooldown - delta, 0.0)
 	_cast_cooldown = maxf(_cast_cooldown - delta, 0.0)
+	_throw_ball_cooldown = maxf(_throw_ball_cooldown - delta, 0.0)
 	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
+	_slow_timer = maxf(_slow_timer - delta, 0.0)
+	set_slow_tint(_slow_timer > 0.0)
 
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
@@ -443,6 +463,16 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# Shoved (snowball): control briefly cut while the push carries us -- like a
+	# mini-ragdoll but upright, no tumble and no recovery pause.
+	if _push_timer > 0.0:
+		_push_timer -= delta
+		if is_on_floor():
+			velocity.x = move_toward(velocity.x, 0.0, 14.0 * delta)
+			velocity.z = move_toward(velocity.z, 0.0, 14.0 * delta)
+		move_and_slide()
+		return
+
 	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
 		var jump_v := JUMP_VELOCITY * _jump_mult
 		if wearing_bunny_ears:
@@ -463,6 +493,8 @@ func _physics_process(delta: float) -> void:
 		if w.is_wading(global_position):
 			speed *= 0.65
 			break
+	if _slow_timer > 0.0:
+		speed *= SLOW_MULT
 	var basis_yaw := Basis(Vector3.UP, camera_yaw)
 	var direction := (basis_yaw * Vector3(_pending_move.x, 0, _pending_move.y))
 	if direction.length() > 0.001:
@@ -538,6 +570,52 @@ func apply_knockback(dir: Vector3, power: float, ragdoll_time: float = RAGDOLL_M
 		carried_item_path = NodePath("")
 	var flat := (dir * Vector3(1, 0, 1)).normalized()
 	velocity = flat * power + Vector3.UP * power * 0.6
+
+
+## Server-only. A troll-style hit: pushed back with control briefly cut, but no
+## ragdoll, no tumble, and no immunity window. The snowball's punch.
+func apply_shove(dir: Vector3, power: float) -> void:
+	if not multiplayer.is_server() or spectating:
+		return
+	var flat := (dir * Vector3(1, 0, 1)).normalized()
+	velocity.x = flat.x * power * SHOVE_SCALE
+	velocity.z = flat.z * power * SHOVE_SCALE
+	_push_timer = SHOVE_TIME
+
+
+## Server-only. Slow this player's movement for `duration` seconds (refreshes,
+## doesn't stack). The frost tint is applied in _physics_process and mirrored to
+## clients through the snapshot's `slow` flag.
+func apply_slow(duration: float) -> void:
+	if not multiplayer.is_server() or spectating:
+		return
+	_slow_timer = maxf(_slow_timer, duration)
+
+
+func is_slowed() -> bool:
+	return _slow_timer > 0.0
+
+
+## Frost-blue tint while slowed: a cold-shifted copy of the active body
+## material, swapped in as an override and restored after. Runs on the server
+## (its own physics) and on clients (from the snapshot).
+func set_slow_tint(v: bool) -> void:
+	if v == _slow_tinted:
+		return
+	_slow_tinted = v
+	if v:
+		_pre_slow_material = mesh.material_override
+		var base := mesh.get_active_material(0)
+		var frost := StandardMaterial3D.new()
+		if base is StandardMaterial3D:
+			frost = (base as StandardMaterial3D).duplicate()
+			var c: Color = frost.albedo_color
+			frost.albedo_color = Color(c.r * 0.55, c.g * 0.75, minf(c.b * 1.3 + 0.25, 1.0), c.a)
+		else:
+			frost.albedo_color = Color(0.55, 0.7, 1.0)
+		mesh.material_override = frost
+	else:
+		mesh.material_override = _pre_slow_material
 
 
 ## Server-only teleport used by the kill plane (see world.gd): drop the player
@@ -667,7 +745,8 @@ func _request_throw() -> void:
 		return
 	# Nothing held: use whichever power we have (the granters keep them
 	# mutually exclusive, see sword_stone.gd / coat_rack.gd).
-	if wearing_hat:
+	if wearing_hat and _throw_ball_cooldown <= 0.0:
+		_throw_ball_cooldown = THROW_BALL_COOLDOWN
 		var world := get_tree().current_scene
 		if world and world.has_method("spawn_snowball"):
 			world.spawn_snowball(self)
@@ -782,6 +861,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
 	set_spectating(state["spec"])
+	set_slow_tint(state["slow"])
 
 
 func _smooth_to_net_state(delta: float) -> void:

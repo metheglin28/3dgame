@@ -15,9 +15,9 @@ const TROLL_CHASE_MULT := 0.85  # lumbering; slower than a goblin's scramble
 
 # Getting hit shoves him: a brief burst of backward velocity that his AI is
 # locked out of overriding until it decays. No immunity, so hits stack and a
-# team can walk him to the edge.
-const SHOVE_SCALE := 0.6        # backward speed per point of incoming knockback
-const SHOVE_TIME := 0.35        # how long the shove overrides his walk
+# team can walk him to the edge. (SHOVE_SCALE and SHOVE_TIME now live on the
+# NPC base -- the snowball gives everyone the same troll-style shove -- and
+# the troll inherits them.)
 const SHOVE_DECEL := 18.0
 
 @onready var club: Node3D = $Mesh/ClubPivot

@@ -57,6 +57,19 @@ var _hit_immunity := 0.0
 # just render the (unmoving) snapshot position.
 var frozen := false
 
+# Shove (snowball): a brief burst of velocity the AI can't override -- no
+# ragdoll, no immunity. Slow (also the snowball): grounded movement scaled down
+# for a few seconds, shown everywhere as a frost-blue tint (the `slow` flag
+# rides the npc snapshot). The troll inherits both, so snowballs are a real
+# counter in the boss fight.
+const SHOVE_SCALE := 0.6
+const SHOVE_TIME := 0.35
+const SLOW_MULT := 0.55
+var _push_timer := 0.0
+var _slow_timer := 0.0
+var _slow_tinted := false
+var _pre_slow_material: Material = null
+
 # Latest server snapshot, smoothed toward in _process on non-server peers.
 var _net_pos_target: Vector3
 var _net_rot_target := 0.0
@@ -116,11 +129,59 @@ func apply_knockback(dir: Vector3, power: float, ragdoll_time: float = RAGDOLL_M
 	velocity = flat * power + Vector3.UP * power * 0.6
 
 
+## Server-only. A troll-style hit: pushed back with the AI briefly locked out,
+## but no ragdoll and no immunity. The snowball's punch.
+func apply_shove(dir: Vector3, power: float) -> void:
+	if not multiplayer.is_server() or frozen:
+		return
+	var flat := (dir * Vector3(1, 0, 1)).normalized()
+	velocity.x = flat.x * power * SHOVE_SCALE
+	velocity.z = flat.z * power * SHOVE_SCALE
+	_push_timer = SHOVE_TIME
+
+
+## Server-only. Slow this NPC's movement for `duration` seconds (refreshes,
+## doesn't stack). Tint is applied in _physics_process and mirrored to clients
+## through the snapshot's `slow` flag.
+func apply_slow(duration: float) -> void:
+	if not multiplayer.is_server() or frozen:
+		return
+	_slow_timer = maxf(_slow_timer, duration)
+
+
+func is_slowed() -> bool:
+	return _slow_timer > 0.0
+
+
+## Frost-blue tint while slowed: a cold-shifted copy of the active body material
+## (so each goblin keeps its own green), swapped in as an override and restored
+## after. Runs on the server and, via the snapshot flag, on every client.
+func set_slow_tint(v: bool) -> void:
+	if v == _slow_tinted:
+		return
+	_slow_tinted = v
+	if v:
+		_pre_slow_material = mesh.material_override
+		var base := mesh.get_active_material(0)
+		var frost := StandardMaterial3D.new()
+		if base is StandardMaterial3D:
+			frost = (base as StandardMaterial3D).duplicate()
+			var c: Color = frost.albedo_color
+			frost.albedo_color = Color(c.r * 0.55, c.g * 0.75, minf(c.b * 1.3 + 0.25, 1.0), c.a)
+		else:
+			frost.albedo_color = Color(0.55, 0.7, 1.0)
+		mesh.material_override = frost
+	else:
+		mesh.material_override = _pre_slow_material
+
+
 func _physics_process(delta: float) -> void:
 	if frozen:
 		velocity = Vector3.ZERO
 		return
 	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
+	_slow_timer = maxf(_slow_timer - delta, 0.0)
+	set_slow_tint(_slow_timer > 0.0)
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
 	elif not _ragdolled:
@@ -142,7 +203,22 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# Shoved (snowball): the push carries us for a beat, AI locked out.
+	if _push_timer > 0.0:
+		_push_timer -= delta
+		if is_on_floor():
+			velocity.x = move_toward(velocity.x, 0.0, 14.0 * delta)
+			velocity.z = move_toward(velocity.z, 0.0, 14.0 * delta)
+		move_and_slide()
+		return
+
 	_ai(delta)
+	# Chilled: the AI's chosen walk (wander or chase, goblin or troll alike)
+	# runs slower. Deliberately NOT applied to ragdoll/shove flight above, so a
+	# slow never weakens a knockback in progress.
+	if _slow_timer > 0.0:
+		velocity.x *= SLOW_MULT
+		velocity.z *= SLOW_MULT
 	move_and_slide()
 
 
@@ -187,6 +263,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	_has_net_state = true
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
+	set_slow_tint(state["slow"])
 
 
 func _process(delta: float) -> void:

@@ -129,11 +129,11 @@ func _physics_process(delta: float) -> void:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
 		# (see player.gd for why).
-		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "bunny": p.wearing_bunny_ears, "wizard": p.wearing_wizard_hat, "tumble": p.tumble, "spec": p.spectating}
+		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "bunny": p.wearing_bunny_ears, "wizard": p.wearing_wizard_hat, "tumble": p.tumble, "spec": p.spectating, "slow": p.is_slowed()}
 	for item in get_tree().get_nodes_in_group("sync_items"):
 		snapshot["items"][item.get_path()] = {"xform": item.global_transform, "held": item.carried_by}
 	for npc in get_tree().get_nodes_in_group("npc"):
-		snapshot["npcs"][npc.get_path()] = {"pos": npc.global_position, "rot": npc.rotation.y, "tumble": npc.tumble}
+		snapshot["npcs"][npc.get_path()] = {"pos": npc.global_position, "rot": npc.rotation.y, "tumble": npc.tumble, "slow": npc.is_slowed()}
 	for proj in get_tree().get_nodes_in_group("sync_projectiles"):
 		snapshot["projectiles"][proj.get_path()] = {"xform": proj.global_transform}
 	_apply_snapshot.rpc(snapshot)

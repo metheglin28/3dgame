@@ -38,8 +38,17 @@ func _physics_process(delta: float) -> void:
 	global_position.z = clampf(global_position.z, STALL_Z_MIN, STALL_Z_MAX)
 
 
-## Bunnies can't be hit: swords, bullets, lightning, and club all no-op here.
+## Bunnies can't be hit: swords, bullets, lightning, club, and snowballs
+## (shove AND slow) all no-op here.
 func apply_knockback(_dir: Vector3, _power: float, _ragdoll_time: float = RAGDOLL_MIN_TIME) -> void:
+	pass
+
+
+func apply_shove(_dir: Vector3, _power: float) -> void:
+	pass
+
+
+func apply_slow(_duration: float) -> void:
 	pass
 
 
