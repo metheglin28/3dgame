@@ -8,6 +8,7 @@ extends Node3D
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const SNOWBALL_SCENE := preload("res://scenes/snowball.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
+const LIGHTNING_SCENE := preload("res://scenes/lightning.tscn")
 const GOBLIN_SCENE := preload("res://scenes/goblin.tscn")
 const TROLL_SCENE := preload("res://scenes/troll.tscn")
 
@@ -128,7 +129,7 @@ func _physics_process(delta: float) -> void:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
 		# (see player.gd for why).
-		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "bunny": p.wearing_bunny_ears, "tumble": p.tumble, "spec": p.spectating}
+		snapshot["players"][id] = {"pos": p.global_position, "rot": p.mesh.rotation.y, "hat": p.wearing_hat, "helmet": p.wearing_helmet, "cowboy": p.wearing_cowboy_hat, "bunny": p.wearing_bunny_ears, "wizard": p.wearing_wizard_hat, "tumble": p.tumble, "spec": p.spectating}
 	for item in get_tree().get_nodes_in_group("sync_items"):
 		snapshot["items"][item.get_path()] = {"xform": item.global_transform, "held": item.carried_by}
 	for npc in get_tree().get_nodes_in_group("npc"):
@@ -296,6 +297,10 @@ func spawn_bullet(shooter: Node3D) -> void:
 	_spawn_from(shooter, "bullet")
 
 
+func spawn_lightning(caster: Node3D) -> void:
+	_spawn_from(caster, "lightning")
+
+
 func _spawn_from(shooter: Node3D, kind: String) -> void:
 	if not multiplayer.is_server():
 		return
@@ -306,7 +311,12 @@ func _spawn_from(shooter: Node3D, kind: String) -> void:
 
 
 func _spawn_projectile(data: Dictionary) -> Node:
-	var scene: PackedScene = BULLET_SCENE if data["kind"] == "bullet" else SNOWBALL_SCENE
+	var scene: PackedScene = SNOWBALL_SCENE
+	match data["kind"]:
+		"bullet":
+			scene = BULLET_SCENE
+		"lightning":
+			scene = LIGHTNING_SCENE
 	var s := scene.instantiate()
 	s.name = "%s%d" % [str(data["kind"]).capitalize(), int(data["id"])]
 	s.global_transform = data["xform"]

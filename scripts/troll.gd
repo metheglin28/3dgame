@@ -52,7 +52,7 @@ func _attack(_prey: Node3D, dir: Vector3) -> void:
 
 ## Server-side hit response. No ragdoll, no immunity: just a shove backward that
 ## his walk can't cancel until it fades.
-func apply_knockback(dir: Vector3, power: float) -> void:
+func apply_knockback(dir: Vector3, power: float, _ragdoll_time: float = 0.0) -> void:
 	if not multiplayer.is_server():
 		return
 	if frozen:

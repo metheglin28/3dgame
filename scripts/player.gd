@@ -17,6 +17,7 @@ const ZOOM_STEP := 0.6
 const MIN_ZOOM := 1.5
 const MAX_ZOOM := 8.0
 const INTERACT_RANGE := 3.0
+const WIZARD_HAT_VISUAL := preload("res://scripts/wizard_hat_visual.gd")
 
 @export var peer_id: int = 1
 
@@ -77,6 +78,19 @@ var wearing_bunny_ears: bool = false:
 			bunny_ears.visible = value
 		if not value:
 			_bounce_mult = 1.0
+## Wizard-hat power, granted by the hat sitting in the woods (see
+## wizard_hat_pickup.gd). While worn, click to cast a blue lightning bolt --
+## moderate knockback, but it leaves whatever it hits ragdolling far longer than
+## a normal hit. Same setter-drives-the-visual + snapshot-sync pattern; the hat
+## itself is built in code (WizardHatVisual) in _ready.
+var wearing_wizard_hat: bool = false:
+	set(value):
+		wearing_wizard_hat = value
+		if wizard_hat:
+			wizard_hat.visible = value
+const CAST_COOLDOWN := 0.5
+var _cast_cooldown: float = 0.0
+
 const BUNNY_JUMP_BASE := 1.2247 # = sqrt(1.5): a 1.5x jump HEIGHT (height goes as velocity^2)
 const BOUNCE_STEP := 1.12      # each in-rhythm bounce multiplies jump by this
 const BOUNCE_WINDOW := 0.25    # re-jump within this long of landing to keep the streak
@@ -157,6 +171,7 @@ const NET_SNAP_DISTANCE := 4.0
 @onready var cowboy_hat: Node3D = $Mesh/CowboyHat
 @onready var revolver: Node3D = $Mesh/RevolverPivot
 @onready var bunny_ears: Node3D = $Mesh/BunnyEars
+@onready var wizard_hat: Node3D = $Mesh/WizardHat
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
 @onready var options_button: Button = $HUD/OptionsButton
@@ -174,6 +189,8 @@ var _spec_target: Node3D = null
 
 func _ready() -> void:
 	add_to_group("players")
+	WIZARD_HAT_VISUAL.build(wizard_hat)
+	wizard_hat.visible = wearing_wizard_hat
 	name_label.text = display_name
 	# A newly-joined peer's chosen name hasn't necessarily round-tripped back to
 	# whoever is spawning this node yet (spawning happens right when the ENet
@@ -397,6 +414,7 @@ func _physics_process(delta: float) -> void:
 	_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
 	_swing_cooldown = maxf(_swing_cooldown - delta, 0.0)
 	_shoot_cooldown = maxf(_shoot_cooldown - delta, 0.0)
+	_cast_cooldown = maxf(_cast_cooldown - delta, 0.0)
 	_hit_immunity = maxf(_hit_immunity - delta, 0.0)
 
 	if not is_on_floor():
@@ -504,14 +522,14 @@ func _send_input(move: Vector2, yaw: float, pitch: float, jump_pressed: bool, sp
 ## (npc.gd): launch with weapon-specific power, cut movement control until
 ## landed and recovered, brief immunity against juggling. Whatever they were
 ## carrying goes flying too -- getting smacked means dropping your stuff.
-func apply_knockback(dir: Vector3, power: float) -> void:
+func apply_knockback(dir: Vector3, power: float, ragdoll_time: float = RAGDOLL_MIN_TIME) -> void:
 	if not multiplayer.is_server():
 		return
 	if _hit_immunity > 0.0:
 		return
 	_hit_immunity = HIT_IMMUNITY
 	ragdolled = true
-	_ragdoll_timer = RAGDOLL_MIN_TIME
+	_ragdoll_timer = ragdoll_time
 	if carried_item_path != NodePath(""):
 		var item := get_node_or_null(carried_item_path)
 		if item:
@@ -663,6 +681,12 @@ func _request_throw() -> void:
 		if world and world.has_method("spawn_bullet"):
 			world.spawn_bullet(self)
 			_play_shoot.rpc()
+	elif wearing_wizard_hat and _cast_cooldown <= 0.0:
+		_cast_cooldown = CAST_COOLDOWN
+		var world := get_tree().current_scene
+		if world and world.has_method("spawn_lightning"):
+			world.spawn_lightning(self)
+			_play_cast.rpc()
 
 
 ## Server-only: the gameplay half of a swing. Shoves any physics prop (items,
@@ -711,6 +735,17 @@ func _play_shoot() -> void:
 	tween.tween_property(revolver, "rotation:x", 0.0, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
 
+## Cosmetic cast: the wizard hat gives a little magic squash-and-pop.
+@rpc("authority", "call_local", "reliable")
+func _play_cast() -> void:
+	if wizard_hat == null:
+		return
+	var tween := create_tween()
+	wizard_hat.scale = Vector3.ONE
+	tween.tween_property(wizard_hat, "scale", Vector3(1.18, 0.85, 1.18), 0.07).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(wizard_hat, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 ## Cosmetic swing arc, played identically on every peer (reliable broadcast,
 ## same pattern as the door toggle -- rare events don't go in the snapshot).
 @rpc("authority", "call_local", "reliable")
@@ -743,6 +778,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	wearing_helmet = state["helmet"]
 	wearing_cowboy_hat = state["cowboy"]
 	wearing_bunny_ears = state["bunny"]
+	wearing_wizard_hat = state["wizard"]
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
 	set_spectating(state["spec"])

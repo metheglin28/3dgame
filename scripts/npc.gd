@@ -104,14 +104,14 @@ func set_frozen(v: bool) -> void:
 	collision_layer = 0 if v else 8
 
 
-func apply_knockback(dir: Vector3, power: float) -> void:
+func apply_knockback(dir: Vector3, power: float, ragdoll_time: float = RAGDOLL_MIN_TIME) -> void:
 	if not multiplayer.is_server():
 		return
 	if frozen or _hit_immunity > 0.0:
 		return
 	_hit_immunity = HIT_IMMUNITY
 	_ragdolled = true
-	_ragdoll_timer = RAGDOLL_MIN_TIME
+	_ragdoll_timer = ragdoll_time
 	var flat := (dir * Vector3(1, 0, 1)).normalized()
 	velocity = flat * power + Vector3.UP * power * 0.6
 

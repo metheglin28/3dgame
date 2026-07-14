@@ -24,6 +24,7 @@ const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
 const CHEST_SCENE := preload("res://scenes/chest.tscn")
 const CROWN_SCENE := preload("res://scenes/crown.tscn")
 const SKULL_STAKE_SCENE := preload("res://scenes/skull_stake.tscn")
+const WIZARD_HAT_PICKUP_SCENE := preload("res://scenes/wizard_hat_pickup.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -686,6 +687,12 @@ func _build_forest() -> void:
 	var sword_stone := SWORD_STONE_SCENE.instantiate()
 	sword_stone.position = Vector3(30, 0, 29)
 	add_child(sword_stone)
+
+	# The wizard hat -- lightning-bolt power -- sitting on the ground nearby. No
+	# permanent home yet; just placed in the woods for now.
+	var wizard_hat := WIZARD_HAT_PICKUP_SCENE.instantiate()
+	wizard_hat.position = Vector3(36, 0.03, 32)
+	add_child(wizard_hat)
 
 
 # --- NE: the goblin cave -----------------------------------------------------------
