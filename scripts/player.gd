@@ -476,6 +476,22 @@ func apply_knockback(dir: Vector3, power: float) -> void:
 	velocity = flat * power + Vector3.UP * power * 0.6
 
 
+## Server-only teleport used by the kill plane (see world.gd): drop the player
+## at `pos`, kill all momentum, and clear any ragdoll/tumble/bounce state so
+## they land clean. Clients pick this up through the snapshot -- the jump is far
+## larger than NET_SNAP_DISTANCE, so they snap instead of zipping across the map.
+func respawn_at(pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	global_position = pos
+	velocity = Vector3.ZERO
+	ragdolled = false
+	_ragdoll_timer = 0.0
+	tumble = 0.0
+	mesh.rotation.x = 0.0
+	_bounce_mult = 1.0
+
+
 @rpc("any_peer", "call_local", "reliable")
 func _request_interact() -> void:
 	if not multiplayer.is_server():

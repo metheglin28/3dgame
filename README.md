@@ -153,10 +153,11 @@ same ranges the sliders allow.
   between the disc and the outer wall is a wide ring of open air with a long
   drop into a pit, so players and enemies can be knocked clean *off* the
   arena, sumo-style. The whole structure sits below ground with its roof
-  just under grade, so surface players never see it. Right now it's
-  **geometry only** — the "fell out of bounds" behavior (elimination /
-  respawn) and the mode rules come later; for now the pit just has a floor
-  at the bottom.
+  just under grade, so surface players never see it. There's a **kill plane**
+  near the bottom of the pit: fall in and, if you're a player, you're
+  teleported back to a town spawn; enemies that fall in are despawned. The
+  actual co-op *mode* rules (win/lose, scoring, who spawns here) come later —
+  for now this is the arena plus its out-of-bounds safety net.
 
 ## Project layout
 

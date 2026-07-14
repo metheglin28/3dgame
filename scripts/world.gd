@@ -9,6 +9,12 @@ const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const SNOWBALL_SCENE := preload("res://scenes/snowball.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 
+# Kill plane. The only thing on the whole map that sits below this is the boss
+# dungeon's pit (arena disc at y=-16, catch floor at y=-40), so in practice this
+# only ever fires there: fall off the arena and you cross it before hitting the
+# floor. Players teleport back to a town spawn; NPCs despawn.
+const KILL_PLANE_Y := -34.0
+
 @onready var players_node: Node3D = $Players
 @onready var spawner: MultiplayerSpawner = $Players/MultiplayerSpawner
 
@@ -87,6 +93,7 @@ func _spawn_player(id: int) -> Node:
 
 func _physics_process(delta: float) -> void:
 	GameDirector.tick(delta)
+	_enforce_kill_plane()
 	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}, "director": GameDirector.net_state()}
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
@@ -121,6 +128,39 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 		if proj:
 			proj.apply_remote_state(snapshot["projectiles"][path])
 	GameDirector.apply_net_state(snapshot["director"])
+
+
+## Server-only (this whole node stops physics-processing on clients). Anything
+## that has fallen below the kill plane gets dealt with: players are teleported
+## back to a town spawn, NPCs are despawned across every peer.
+func _enforce_kill_plane() -> void:
+	for id in player_nodes:
+		var p: Node3D = player_nodes[id]
+		if p.global_position.y < KILL_PLANE_Y:
+			p.respawn_at(_town_spawn())
+	for npc in get_tree().get_nodes_in_group("npc"):
+		if npc.is_queued_for_deletion():
+			continue
+		if npc.global_position.y < KILL_PLANE_Y:
+			_remove_node.rpc(npc.get_path())
+
+
+## A random town spawn marker's position (same set the game spawns players at).
+func _town_spawn() -> Vector3:
+	var points := get_tree().get_nodes_in_group("player_spawn")
+	if points.is_empty():
+		return Vector3(0, 1, 8)
+	var point: Node3D = points[randi() % points.size()]
+	return point.global_position
+
+
+## Free a node on every peer. NPCs live in the static scene on all peers, so a
+## server-only queue_free wouldn't reach clients -- this reliable RPC does.
+@rpc("authority", "call_local", "reliable")
+func _remove_node(path: NodePath) -> void:
+	var n := get_node_or_null(path)
+	if n:
+		n.queue_free()
 
 
 ## Called by a player (server-side only, see player.gd's _request_throw) to

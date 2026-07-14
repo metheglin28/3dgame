@@ -44,8 +44,10 @@ from snapshots), **deterministic map** (no runtime randomness for layout),
 ## Phase 0 — Foundational primitives (the skeleton)
 
 ### 0.1 Respawn / reset
-- [ ] Kill-plane: below a Y threshold (or outside map bounds) → respawn.
-      *Also fixes the uncapped bunny-jump "launched off-map, stuck" hole.*
+- [x] Kill-plane: below a Y threshold → players teleport to a town spawn,
+      NPCs despawn (server-authoritative, in `world.gd`). Currently only the
+      boss-dungeon pit sits below it. *(Not yet extended to off-map bounds for
+      the uncapped bunny-jump hole — that's a wider threshold/region later.)*
 - [ ] Manual "I'm stuck" respawn (hold a key for ~1s).
 - [ ] Server-authoritative respawn: teleport to a spawn point, zero velocity,
       clear ragdoll/tumble state. *Spawn markers already exist (`player_spawn`
