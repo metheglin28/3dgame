@@ -25,9 +25,14 @@ const COUNTDOWN_TIME := 3.0
 const RESULT_TIME := 6.0
 const HILL_RADIUS := 4.5
 const HILL_Y_TOLERANCE := 2.5 # count as "on the hill" within this of hill height
+## Mid-round hill relocation: the hill moves every HILL_SHIFT_TIME seconds, so
+## a ROUND_TIME of 150 gives exactly 3 hills per round. Control time carries
+## across shifts -- the round's total decides the winner.
+const HILL_SHIFT_TIME := 50.0
 
-## The rotating list of hill spots (surface y). Advances one step per round, so
-## it's deterministic -- same order every session, no runtime randomness.
+## The rotating list of hill spots (surface y). Advances one step per shift
+## (and round to round), so it's deterministic -- same order every session,
+## no runtime randomness.
 const HILL_SPOTS: Array[Vector3] = [
 	Vector3(0, 0, -10),    # town plaza, south of the lever-door wall
 	Vector3(-35, 0, 28),   # farm field
@@ -40,6 +45,7 @@ var mode: int = Mode.KOTH
 var timer: float = 0.0             # counts down within COUNTDOWN/PLAYING/ROUND_END
 var hill_index: int = -1
 var hill_center: Vector3 = Vector3.ZERO
+var hill_shift_timer: float = 0.0  # counts down to the next mid-round hill move
 var king_id: int = -1              # sole occupant right now, or -1
 var control_time: Dictionary = {}  # peer_id -> seconds held this round
 var session_wins: Dictionary = {}  # peer_id -> rounds won this session
@@ -71,8 +77,7 @@ func start_round() -> void:
 	if not multiplayer.is_server() or state != HUB:
 		return
 	mode = Mode.KOTH
-	hill_index = (hill_index + 1) % HILL_SPOTS.size()
-	hill_center = HILL_SPOTS[hill_index]
+	_advance_hill()
 	control_time.clear()
 	king_id = -1
 	timer = COUNTDOWN_TIME
@@ -101,10 +106,17 @@ func tick(delta: float) -> void:
 			timer -= delta
 			if timer <= 0.0:
 				timer = ROUND_TIME
+				hill_shift_timer = HILL_SHIFT_TIME
 				_set_state(PLAYING)
 		PLAYING:
 			if mode == Mode.KOTH:
 				_update_king(delta)
+				# The hill relocates every HILL_SHIFT_TIME; skip the shift that
+				# would coincide with the round's own end.
+				hill_shift_timer -= delta
+				if hill_shift_timer <= 0.0 and timer > HILL_SHIFT_TIME * 0.5:
+					hill_shift_timer = HILL_SHIFT_TIME
+					_advance_hill()
 				timer -= delta
 				if timer <= 0.0:
 					_finish_round()
@@ -124,6 +136,11 @@ func tick(delta: float) -> void:
 			if timer <= 0.0:
 				king_id = -1
 				_set_state(HUB)
+
+
+func _advance_hill() -> void:
+	hill_index = (hill_index + 1) % HILL_SPOTS.size()
+	hill_center = HILL_SPOTS[hill_index]
 
 
 func _update_king(delta: float) -> void:
@@ -181,7 +198,7 @@ func net_state() -> Dictionary:
 	return {
 		"st": state, "md": mode, "t": timer, "hill": hill_center, "king": king_id,
 		"ctrl": control_time.duplicate(), "wins": session_wins.duplicate(),
-		"win": last_winner, "bwon": boss_won,
+		"win": last_winner, "bwon": boss_won, "hst": hill_shift_timer,
 	}
 
 
@@ -196,6 +213,7 @@ func apply_net_state(d: Dictionary) -> void:
 	session_wins = d["wins"]
 	last_winner = d["win"]
 	boss_won = d["bwon"]
+	hill_shift_timer = d["hst"]
 
 
 ## --- the hill marker (local visual on every peer, driven by hill_center) ---

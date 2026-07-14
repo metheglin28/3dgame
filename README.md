@@ -57,8 +57,10 @@ same ranges the sliders allow.
 - **King of the Hill (party round)** — the hub doubles as an arena. Interact
   with the crown on the table inside the town's south house to start a ~2.5 min
   round: a glowing ring appears at one of a rotating set of spots (plaza, farm,
-  forest, snowy hills), and while you're its *sole* occupant you bank control
-  time (contested or empty = frozen). Most time held when the clock runs out
+  forest, snowy hills) and **relocates every 50 seconds** — three hills per
+  round, with a HUD countdown to each move. While you're the ring's *sole*
+  occupant you bank control time (contested or empty = frozen), and your
+  total carries across hill moves. Most time held when the clock runs out
   wins the round; a running scoreboard tracks wins for the session. You keep and
   grab powers as normal during a round, so shoving the King off with a sword,
   snowballs, or the revolver is the whole game. Built on a reusable

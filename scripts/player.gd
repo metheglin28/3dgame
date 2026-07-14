@@ -371,7 +371,13 @@ func _update_round_hud() -> void:
 			var king := "—"
 			if GameDirector.king_id != -1:
 				king = str(NetworkManager.player_names.get(GameDirector.king_id, "?"))
-			round_label.text = "%s   King: %s\n%s" % [_clock(GameDirector.timer), king, _score_lines()]
+			var shift := ""
+			# Only warn about the next hill move if one is actually coming: the
+			# shift fires when hill_shift_timer runs out, and the director skips
+			# any shift landing in the round's final stretch.
+			if GameDirector.timer - GameDirector.hill_shift_timer > GameDirector.HILL_SHIFT_TIME * 0.5:
+				shift = "   hill moves in %d" % ceili(GameDirector.hill_shift_timer)
+			round_label.text = "%s   King: %s%s\n%s" % [_clock(GameDirector.timer), king, shift, _score_lines()]
 		GameDirector.ROUND_END:
 			var w := "Nobody"
 			if GameDirector.last_winner != -1:
