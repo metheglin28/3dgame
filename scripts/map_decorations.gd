@@ -25,6 +25,7 @@ const CHEST_SCENE := preload("res://scenes/chest.tscn")
 const CROWN_SCENE := preload("res://scenes/crown.tscn")
 const SKULL_STAKE_SCENE := preload("res://scenes/skull_stake.tscn")
 const WIZARD_HAT_PICKUP_SCENE := preload("res://scenes/wizard_hat_pickup.tscn")
+const BUNNY_SCENE := preload("res://scenes/bunny.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -1156,15 +1157,17 @@ func _build_farm() -> void:
 	_add_box(Vector3(-39.5, fh * 0.5, 15), Vector3(31, fh, 0.2), FENCE_WOOD)    # south, west of gap
 	_add_box(Vector3(-16.5, fh * 0.5, 15), Vector3(3, fh, 0.2), FENCE_WOOD)     # south, east of gap
 
-	# Barn with a roof, and a silo beside it.
-	_add_box(Vector3(-45, 2.5, 45), Vector3(8, 5, 10), BARN_RED)
-	_add_box(Vector3(-45, 5.9, 45), Vector3(8.6, 1.8, 10.6), BARN_ROOF)
+	# The barn (hollow, enterable -- see _build_barn) and the silo beside it.
+	_build_barn()
 	_add_cylinder(Vector3(-37, 3, 48), 1.5, 1.5, 6.0, Color(0.8, 0.8, 0.75))
 	_add_cylinder(Vector3(-37, 7, 48), 0.0, 1.5, 2.0, BARN_RED, false)
 
 	# Crop rows (visual only, no collision, so nobody gets stuck on the lettuce).
-	for i in range(8):
+	# The last row would cross the (now hollow) barn's interior, so it's grown
+	# only east of the barn instead of running through stall A.
+	for i in range(7):
 		_add_box(Vector3(-38, 0.08, 20 + i * 3), Vector3(26, 0.15, 1.0), Color(0.55, 0.42, 0.18), false)
+	_add_box(Vector3(-32.9, 0.08, 41), Vector3(15.8, 0.15, 1.0), Color(0.55, 0.42, 0.18), false)
 
 	# Scarecrow.
 	_add_box(Vector3(-21, 1.2, 30), Vector3(0.15, 2.4, 0.15), FENCE_WOOD)
@@ -1177,6 +1180,64 @@ func _build_farm() -> void:
 	_add_cylinder(Vector3(-17.8, 0.7, 26.5), 1.0, 1.0, 1.4, Color(0.85, 0.75, 0.4))
 
 	_build_pond()
+
+
+## The barn, hollowed out: same 8x10 red shell and roof as the old solid box,
+## but now walls around an interior with three wooden stalls along the west
+## wall -- two stocked with hay, the middle one home to a small family of
+## bunnies (one mama, three babies; see bunny.gd). A 3m doorway on the south
+## wall faces the crop field. Each stall's front rail leaves a gap so players
+## can walk in with the rabbits.
+func _build_barn() -> void:
+	var c := Vector3(-45, 0, 45)   # barn center at grade; footprint x -49..-41, z 40..50
+	var h := 5.0
+	var t := 0.3
+	# Walls: north/west/east full; south split around a 3m-wide, 3.2m-tall door.
+	_add_box(c + Vector3(0, h * 0.5, 5.0 - t * 0.5), Vector3(8, h, t), BARN_RED)          # north
+	_add_box(c + Vector3(-4.0 + t * 0.5, h * 0.5, 0), Vector3(t, h, 10), BARN_RED)        # west
+	_add_box(c + Vector3(4.0 - t * 0.5, h * 0.5, 0), Vector3(t, h, 10), BARN_RED)         # east
+	_add_box(c + Vector3(-2.75, h * 0.5, -5.0 + t * 0.5), Vector3(2.5, h, t), BARN_RED)   # south, west of door
+	_add_box(c + Vector3(2.75, h * 0.5, -5.0 + t * 0.5), Vector3(2.5, h, t), BARN_RED)    # south, east of door
+	_add_box(c + Vector3(0, 3.2 + (h - 3.2) * 0.5, -5.0 + t * 0.5), Vector3(3, h - 3.2, t), BARN_RED) # door lintel
+	_add_box(c + Vector3(0, 5.9, 0), Vector3(8.6, 1.8, 10.6), BARN_ROOF)
+	# Dirt floor and a lantern so the inside isn't pitch black under the roof.
+	_add_ground_patch(c + Vector3(0, 0.035, 0), Vector2(7.6, 9.6), Color(0.45, 0.34, 0.2))
+	_add_torch(c + Vector3(0, 4.3, 0))
+	_add_torch(c + Vector3(-2.5, 2.6, -4.4))
+
+	# Three stalls along the west wall (depth 2.6), split by two low partitions.
+	# Fronts get a rail with a ~1.1m gap so each stall can be walked into.
+	var sx := -47.55   # stall interior center x
+	var fx := -46.15   # stall front rail x
+	for pz: float in [43.5, 46.5]:
+		_add_box(Vector3(sx, 0.5, pz), Vector3(2.7, 1.0, 0.12), FENCE_WOOD)
+	_add_box(Vector3(fx, 0.45, 41.3), Vector3(0.12, 0.9, 1.4), FENCE_WOOD)   # stall A rail (1.4m gap at north end)
+	_add_box(Vector3(fx, 0.45, 45.75), Vector3(0.12, 0.9, 1.3), FENCE_WOOD)  # bunny stall rail (1.5m gap at south end)
+	_add_box(Vector3(fx, 0.45, 48.75), Vector3(0.12, 0.9, 1.3), FENCE_WOOD)  # stall C rail (1.5m gap at south end)
+
+	# Hay: mats (flat, no collision) in every stall, bales in the outer two.
+	var hay := Color(0.85, 0.75, 0.4)
+	for hz: float in [42.0, 45.0, 48.0]:
+		_add_cylinder(Vector3(sx, 0.13, hz), 0.95, 1.05, 0.22, hay, false)
+	_add_cylinder(Vector3(-48.1, 0.35, 40.9), 0.45, 0.45, 0.7, hay)
+	_add_cylinder(Vector3(-47.0, 0.35, 42.6), 0.45, 0.45, 0.7, hay)
+	_add_cylinder(Vector3(-48.1, 0.35, 49.0), 0.45, 0.45, 0.7, hay)
+	_add_cylinder(Vector3(-48.0, 1.05, 49.0), 0.45, 0.45, 0.7, hay)
+	# A spare bale stack by the east wall of the walkway.
+	_add_cylinder(Vector3(-42.0, 0.35, 48.6), 0.45, 0.45, 0.7, hay)
+	_add_cylinder(Vector3(-42.0, 1.05, 48.5), 0.45, 0.45, 0.7, hay)
+
+	# The bunny family, middle stall: one mama, three babies. They wander on a
+	# tiny leash, so they stay home; the rail gap lets players walk in and pet
+	# them (they're full NPCs -- snapshot-synced, pettable, and yes, swordable).
+	var family := [
+		[-47.8, 44.6, 1.15], [-47.15, 45.35, 0.7], [-48.05, 45.5, 0.7], [-47.3, 44.1, 0.7],
+	]
+	for b in family:
+		var bunny := BUNNY_SCENE.instantiate()
+		bunny.position = Vector3(b[0], 0.02, b[1])
+		bunny.bunny_scale = b[2]
+		add_child(bunny)
 
 
 ## The duck pond. The bowl is four full-width shore ramps (one per side)
