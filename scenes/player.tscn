@@ -111,6 +111,16 @@ albedo_color = Color(0.96, 0.75, 0.82, 1)
 inner_radius = 0.24
 outer_radius = 0.31
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ear_gold"]
+albedo_color = Color(0.95, 0.78, 0.2, 1)
+metallic = 0.7
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ear_amber"]
+albedo_color = Color(0.85, 0.55, 0.15, 1)
+metallic = 0.5
+roughness = 0.4
+
 [sub_resource type="LabelSettings" id="LabelSettings_1"]
 font_size = 32
 outline_size = 6
@@ -243,6 +253,35 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ear_white")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.05)
 mesh = SubResource("CapsuleMesh_ear_inner")
 surface_material_override/0 = SubResource("StandardMaterial3D_ear_pink")
+
+[node name="GoldenEars" type="Node3D" parent="Mesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+visible = false
+
+[node name="Headband" type="MeshInstance3D" parent="Mesh/GoldenEars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.08, 0)
+mesh = SubResource("TorusMesh_headband")
+surface_material_override/0 = SubResource("StandardMaterial3D_ear_gold")
+
+[node name="EarL" type="MeshInstance3D" parent="Mesh/GoldenEars"]
+transform = Transform3D(0.9848, 0.1736, 0, -0.1736, 0.9848, 0, 0, 0, 1, -0.16, 0.28, 0)
+mesh = SubResource("CapsuleMesh_ear")
+surface_material_override/0 = SubResource("StandardMaterial3D_ear_gold")
+
+[node name="InnerL" type="MeshInstance3D" parent="Mesh/GoldenEars/EarL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.05)
+mesh = SubResource("CapsuleMesh_ear_inner")
+surface_material_override/0 = SubResource("StandardMaterial3D_ear_amber")
+
+[node name="EarR" type="MeshInstance3D" parent="Mesh/GoldenEars"]
+transform = Transform3D(0.9848, -0.1736, 0, 0.1736, 0.9848, 0, 0, 0, 1, 0.16, 0.28, 0)
+mesh = SubResource("CapsuleMesh_ear")
+surface_material_override/0 = SubResource("StandardMaterial3D_ear_gold")
+
+[node name="InnerR" type="MeshInstance3D" parent="Mesh/GoldenEars/EarR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.05)
+mesh = SubResource("CapsuleMesh_ear_inner")
+surface_material_override/0 = SubResource("StandardMaterial3D_ear_amber")
 
 [node name="WizardHat" type="Node3D" parent="Mesh"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)

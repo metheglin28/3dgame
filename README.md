@@ -108,13 +108,20 @@ same ranges the sliders allow.
   base jump is 1.5x higher, and every consecutive bounce (re-jump the
   instant you land) stacks higher and higher with no cap; miss the rhythm
   and you drop back to the 1.5x base. You can hold only one power at a
-  time — snowball hat, sword, revolver, bunny ears, or wizard hat; each
-  replaces the others.
+  time — snowball hat, sword, revolver, bunny ears, wizard hat, or golden
+  ears; each replaces the others.
 - **A wizard hat** (blue cone with white stars) sitting on the ground in the
   forest clearing near the sword in the stone — it has no permanent home yet.
   Take it to don the hat, then click to cast a **blue lightning bolt**: it
   flies flat and fast with moderate knockback, but leaves whatever it zaps
   ragdolling and tumbling roughly three times longer than a normal hit.
+- **Golden ears** — the bunny-ears variation, borrowed from the Bunny Man on
+  the secret moon. Same look but gold, and the same jump kit (1.5x plus the
+  consecutive-bounce stacking). Their trick is a **ground pound**: while
+  airborne, hit and hold the attack button to dive straight down; on landing,
+  everyone near the impact is knocked back — harder the farther you fell
+  (capped). Release mid-dive to cancel. A little hop-slam is weaker than a
+  sword; a dive from a big bounce-stack (or off the moon) hits like a truck.
 - **A goblin cave** in the forest's NE corner: a rocky mouth with skull
   stakes that burrows due north in one straight line of rooms, descending
   as it goes — entry tunnel and goblin warren at the surface, a long

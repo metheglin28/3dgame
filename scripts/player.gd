@@ -96,6 +96,33 @@ var wearing_wizard_hat: bool = false:
 const CAST_COOLDOWN := 0.5
 var _cast_cooldown: float = 0.0
 
+## Golden-ears power (the bunny-ears variation, granted by the Bunny Man on the
+## moon -- see bunny_man.gd). Same full bunny jump (1.5x + bounce stacking), PLUS
+## a ground-pound: hold the attack button while airborne to dive straight down,
+## and on landing everyone near the impact is knocked back -- harder the farther
+## you fell. Release mid-dive to cancel. Server-authoritative; the flag rides the
+## snapshot, the impact shockwave is an RPC.
+var wearing_golden_ears: bool = false:
+	set(value):
+		wearing_golden_ears = value
+		if golden_ears:
+			golden_ears.visible = value
+		if not value:
+			_bounce_mult = 1.0
+			_slamming = false
+const SLAM_SPEED := 30.0       # dive velocity, straight down
+const SLAM_STEER := 0.35       # fraction of normal horizontal control while diving
+const SLAM_RADIUS := 4.0       # impact knockback radius
+const SLAM_MIN_DROP := 1.5     # need to have fallen at least this far for any AoE
+const SLAM_BASE_KB := 6.0
+const SLAM_KB_PER_M := 0.6     # knockback added per metre of drop
+const SLAM_MIN_KB := 8.0
+const SLAM_MAX_KB := 24.0      # cap so moon-height dives don't delete the server
+var _pending_slam: bool = false
+var _slam_was_held: bool = false  # prev frame, for rising-edge (a fresh press starts the dive)
+var _slamming: bool = false
+var _slam_start_y: float = 0.0
+
 # The lunar low-gravity band: any airtime above LOW_GRAV_Y falls softly. Only
 # the secret moon area (and the teleport arrival above it) lives that high.
 const LOW_GRAV_Y := 150.0
@@ -202,6 +229,7 @@ const NET_SNAP_DISTANCE := 4.0
 @onready var cowboy_hat: Node3D = $Mesh/CowboyHat
 @onready var revolver: Node3D = $Mesh/RevolverPivot
 @onready var bunny_ears: Node3D = $Mesh/BunnyEars
+@onready var golden_ears: Node3D = $Mesh/GoldenEars
 @onready var wizard_hat: Node3D = $Mesh/WizardHat
 @onready var prompt_label: Label = $HUD/InteractPrompt
 @onready var leave_button: Button = $HUD/LeaveButton
@@ -436,7 +464,8 @@ func _physics_process(delta: float) -> void:
 		)
 		var jump_pressed := Input.is_action_just_pressed("jump")
 		var sprint_held := Input.is_action_pressed("sprint")
-		_send_input.rpc_id(1, input_dir, camera_yaw, camera_pitch, jump_pressed, sprint_held)
+		var slam_held := Input.is_action_pressed("throw")
+		_send_input.rpc_id(1, input_dir, camera_yaw, camera_pitch, jump_pressed, sprint_held, slam_held)
 
 	if not multiplayer.is_server():
 		return
@@ -498,9 +527,34 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# Golden-ears ground pound: a FRESH press of attack while airborne starts the
+	# dive (rising edge, so merely holding attack through a jump doesn't trigger
+	# it); keep holding to dive, release to cancel.
+	var slam_pressed := _pending_slam and not _slam_was_held
+	_slam_was_held = _pending_slam
+	if wearing_golden_ears and not _slamming and slam_pressed and not is_on_floor():
+		_slamming = true
+		_slam_start_y = global_position.y
+	if _slamming:
+		if not _pending_slam or not wearing_golden_ears:
+			_slamming = false # released mid-dive -> cancel, resume a normal fall
+		else:
+			velocity.y = -SLAM_SPEED
+			var sdir := (Basis(Vector3.UP, camera_yaw) * Vector3(_pending_move.x, 0, _pending_move.y))
+			if sdir.length() > 0.001:
+				sdir = sdir.normalized()
+			velocity.x = move_toward(velocity.x, sdir.x * SPEED * SLAM_STEER, SPEED * ACCEL * delta)
+			velocity.z = move_toward(velocity.z, sdir.z * SPEED * SLAM_STEER, SPEED * ACCEL * delta)
+			move_and_slide()
+			if is_on_floor():
+				_slamming = false
+				_do_slam_impact()
+				_play_land_squash()
+			return
+
 	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
 		var jump_v := JUMP_VELOCITY * _jump_mult
-		if wearing_bunny_ears:
+		if wearing_bunny_ears or wearing_golden_ears:
 			# Bounce in rhythm (jump again within BOUNCE_WINDOW of landing) and
 			# the streak grows; land and dawdle and it resets to the 1.5x base.
 			if _time_since_land <= BOUNCE_WINDOW:
@@ -557,13 +611,14 @@ func _verified_sender_id() -> int:
 
 
 @rpc("any_peer", "call_local", "unreliable_ordered")
-func _send_input(move: Vector2, yaw: float, pitch: float, jump_pressed: bool, sprint_held: bool) -> void:
+func _send_input(move: Vector2, yaw: float, pitch: float, jump_pressed: bool, sprint_held: bool, slam_held: bool = false) -> void:
 	if not multiplayer.is_server():
 		return
 	if _verified_sender_id() != peer_id:
 		return
 	_pending_move = move
 	_pending_sprint = sprint_held
+	_pending_slam = slam_held
 	camera_yaw = yaw
 	# Needed so the server's own interact raycast (see _server_side_look_target)
 	# looks the same direction the real player on this client is actually aiming,
@@ -664,6 +719,45 @@ func respawn_at(pos: Vector3) -> void:
 	tumble = 0.0
 	mesh.rotation.x = 0.0
 	_bounce_mult = 1.0
+	_slamming = false
+
+
+## Server-only. The golden-ears ground pound landed: knock back everyone near
+## the impact, harder the farther we fell (measured from where the dive began).
+func _do_slam_impact() -> void:
+	var drop := _slam_start_y - global_position.y
+	if drop < SLAM_MIN_DROP:
+		return
+	var power := clampf(SLAM_BASE_KB + SLAM_KB_PER_M * drop, SLAM_MIN_KB, SLAM_MAX_KB)
+	var origin := global_position
+	var characters: Array[Node] = []
+	characters.append_array(get_tree().get_nodes_in_group("players"))
+	characters.append_array(get_tree().get_nodes_in_group("npc"))
+	for c in characters:
+		if c == self or not c.has_method("apply_knockback"):
+			continue
+		var to: Vector3 = c.global_position - origin
+		var flat := to * Vector3(1, 0, 1)
+		if flat.length() > SLAM_RADIUS or absf(to.y) > SLAM_RADIUS:
+			continue
+		var dir := flat.normalized() if flat.length() > 0.05 else Vector3(sin(mesh.rotation.y), 0, cos(mesh.rotation.y))
+		c.apply_knockback(dir, power)
+	# Fling loose props/snowballs, same as a sword swing.
+	var props: Array[Node] = []
+	props.append_array(get_tree().get_nodes_in_group("sync_items"))
+	props.append_array(get_tree().get_nodes_in_group("sync_projectiles"))
+	for t in props:
+		if not t is RigidBody3D:
+			continue
+		var to: Vector3 = t.global_position - origin
+		if (to * Vector3(1, 0, 1)).length() > SLAM_RADIUS:
+			continue
+		if "carried_by" in t and t.carried_by != -1:
+			continue
+		t.freeze = false
+		var pd := (to * Vector3(1, 0, 1)).normalized()
+		t.apply_central_impulse((pd + Vector3.UP * 0.7).normalized() * power * t.mass)
+	_play_slam.rpc(origin, power)
 
 
 ## Server-only. Called by the kill plane when this player falls out during a boss
@@ -677,6 +771,7 @@ func enter_spectator() -> void:
 	_ragdoll_timer = 0.0
 	tumble = 0.0
 	mesh.rotation.x = 0.0
+	_slamming = false
 	if carried_item_path != NodePath(""):
 		var item := get_node_or_null(carried_item_path)
 		if item:
@@ -857,6 +952,51 @@ func _play_cast() -> void:
 	tween.tween_property(wizard_hat, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+## The golden-ears impact, played on every peer: a gold shockwave ring that
+## expands and fades at the landing point, plus a puff of dust. `power` scales
+## the ring's reach so a bigger slam reads bigger. Parented to the scene root.
+@rpc("authority", "call_local", "reliable")
+func _play_slam(at: Vector3, power: float) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var reach: float = SLAM_RADIUS * (0.7 + power / SLAM_MAX_KB * 0.5)
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.1
+	tm.outer_radius = 0.35
+	ring.mesh = tm
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = Color(0.95, 0.8, 0.25)
+	rmat.emission_enabled = true
+	rmat.emission = Color(0.95, 0.75, 0.2)
+	rmat.emission_energy_multiplier = 1.5
+	ring.material_override = rmat
+	scene.add_child(ring)
+	ring.global_position = at + Vector3(0, 0.15, 0)
+	var t := ring.create_tween()
+	t.tween_property(ring, "scale", Vector3(reach, reach * 0.4, reach), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.parallel().tween_property(rmat, "albedo_color:a", 0.0, 0.35)
+	var dust_mat := StandardMaterial3D.new()
+	dust_mat.albedo_color = Color(0.85, 0.78, 0.55)
+	for k in range(6):
+		var fleck := MeshInstance3D.new()
+		var s := SphereMesh.new()
+		s.radius = 0.09
+		s.height = 0.18
+		fleck.mesh = s
+		fleck.material_override = dust_mat
+		scene.add_child(fleck)
+		fleck.global_position = at + Vector3(0, 0.1, 0)
+		var a := TAU * float(k) / 6.0
+		var out := at + Vector3(cos(a) * reach * 0.5, 0.5, sin(a) * reach * 0.5)
+		var ft := fleck.create_tween()
+		ft.tween_property(fleck, "global_position", out, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		ft.parallel().tween_property(fleck, "scale", Vector3(0.05, 0.05, 0.05), 0.3)
+		ft.chain().tween_callback(fleck.queue_free)
+	get_tree().create_timer(0.5).timeout.connect(func(): if is_instance_valid(ring): ring.queue_free())
+
+
 ## Cosmetic swing arc, played identically on every peer (reliable broadcast,
 ## same pattern as the door toggle -- rare events don't go in the snapshot).
 @rpc("authority", "call_local", "reliable")
@@ -890,6 +1030,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	wearing_cowboy_hat = state["cowboy"]
 	wearing_bunny_ears = state["bunny"]
 	wearing_wizard_hat = state["wizard"]
+	wearing_golden_ears = state["golden"]
 	tumble = state["tumble"]
 	mesh.rotation.x = tumble
 	set_spectating(state["spec"])
