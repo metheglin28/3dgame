@@ -26,6 +26,7 @@ const CROWN_SCENE := preload("res://scenes/crown.tscn")
 const SKULL_STAKE_SCENE := preload("res://scenes/skull_stake.tscn")
 const WIZARD_HAT_PICKUP_SCENE := preload("res://scenes/wizard_hat_pickup.tscn")
 const BUNNY_SCENE := preload("res://scenes/bunny.tscn")
+const BUNNY_MAN_SCENE := preload("res://scenes/bunny_man.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -1037,9 +1038,11 @@ func _build_moon() -> void:
 		var a := TAU * float(k) / 6.0 + rng.randf_range(-0.4, 0.4)
 		var d := rng.randf_range(9.0, 18.0)
 		_add_sphere(c + Vector3(cos(a) * d, 0.7, sin(a) * d), rng.randf_range(0.7, 1.3), MOON_GRAY)
-	# A little flag, planted by whoever bounced here first.
-	_add_box(c + Vector3(4, 1.7, 2), Vector3(0.08, 2.2, 0.08), Color(0.8, 0.8, 0.82))
-	_add_box(c + Vector3(4.45, 2.5, 2), Vector3(0.85, 0.55, 0.04), Color(0.85, 0.2, 0.2), false)
+	# The Bunny Man: the moon's sole resident (see bunny_man.gd). Wanders a
+	# small patch near the middle; silent for now -- his hunt comes later.
+	var bunny_man := BUNNY_MAN_SCENE.instantiate()
+	bunny_man.position = c + Vector3(4, 0.62, 2)
+	add_child(bunny_man)
 
 	# The space illusion: a huge inside-out unshaded near-black shell around
 	# everything (CULL_FRONT renders only its interior faces, so from outside
