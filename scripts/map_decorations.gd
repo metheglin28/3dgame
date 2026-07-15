@@ -21,7 +21,7 @@ const SNOWMAN_SCENE := preload("res://scenes/snowman.tscn")
 const SWORD_STONE_SCENE := preload("res://scenes/sword_stone.tscn")
 const POND_RIPPLES := preload("res://scripts/pond_ripples.gd")
 const COAT_RACK_SCENE := preload("res://scenes/coat_rack.tscn")
-const CHEST_SCENE := preload("res://scenes/chest.tscn")
+const GEM_SCENE := preload("res://scenes/gem.tscn")
 const CROWN_SCENE := preload("res://scenes/crown.tscn")
 const SKULL_STAKE_SCENE := preload("res://scenes/skull_stake.tscn")
 const WIZARD_HAT_PICKUP_SCENE := preload("res://scenes/wizard_hat_pickup.tscn")
@@ -879,15 +879,18 @@ func _build_cave() -> void:
 	_add_torch(Vector3(39.4, -5, 87.3))
 	_add_torch(Vector3(39.4, -6.1, 95.25))    # loot room
 
-	# The treasure: a chest and a spill of gold. Not lootable (yet) -- it's
-	# set dressing for the goblins to guard once they move in.
-	# Chest against the far wall so it doesn't block the doorway.
+	# The treasure: a chest with the reward gem resting in it, plus a spill of
+	# gold. Chest against the far wall so it doesn't block the doorway.
 	_add_box(Vector3(39.4, -8.15, 96.6), Vector3(1.0, 0.7, 0.7), CHEST_BROWN)
-	# Invisible interact volume over the chest -- the reward, grants the bunny
-	# ears (see chest.gd). The chest's look above is deliberately unchanged.
-	var chest := CHEST_SCENE.instantiate()
-	chest.position = Vector3(39.4, -8.5, 96.6)
-	add_child(chest)
+	# The reward: one large red gem, a carry/throw pickup (see gem.tscn). Grab it
+	# ("Take the Gem") and haul it back out of the cave -- that's the prize for
+	# clearing the place. Dropped in resting on the open chest; the server lets
+	# it settle. This is what the chest gives now (it used to grant bunny ears --
+	# those still come from the barn's mama bunny).
+	var gem := GEM_SCENE.instantiate()
+	gem.position = Vector3(39.4, -7.1, 96.6)
+	gem.add_to_group("cave_gem")
+	add_child(gem)
 	_add_box(Vector3(39.4, -7.72, 96.6), Vector3(1.06, 0.16, 0.76), Color(0.3, 0.18, 0.08, 1), false)
 	_add_sphere(Vector3(39.4, -7.55, 96.6), 0.12, GOLD, false)
 	_add_cylinder(Vector3(40.4, -8.44, 95.2), 0.6, 0.6, 0.12, GOLD, false)

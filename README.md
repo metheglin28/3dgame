@@ -104,12 +104,14 @@ same ranges the sliders allow.
   revolver; click to fire a small, very fast bullet that ragdolls whatever
   it hits with the hardest knockback in the game.
 - **The goblin cave's treasure chest** (at the end of the descending line,
-  past the goblins) — open it to don a bunny-ear headband. While worn your
-  base jump is 1.5x higher, and every consecutive bounce (re-jump the
-  instant you land) stacks higher and higher with no cap; miss the rhythm
-  and you drop back to the 1.5x base. You can hold only one power at a
-  time — snowball hat, sword, revolver, bunny ears, wizard hat, or golden
-  ears; each replaces the others.
+  past the goblins) — a **large red gem** rests in it. Grab it ("Take the
+  Gem") and haul it back out of the cave: carrying the prize out through the
+  goblins is the reward for clearing the place. It's an ordinary carry/throw
+  prop once you have it (like the red boxes, just bigger and shinier). *(The
+  bunny-ear headband — 1.5x jump plus the consecutive-bounce stacking — now
+  comes from the mama bunny in the barn instead. You can hold only one power
+  at a time: snowball hat, sword, revolver, bunny ears, wizard hat, or golden
+  ears; each replaces the others.)*
 - **A wizard hat** (blue cone with white stars) sitting on the ground in the
   forest clearing near the sword in the stone — it has no permanent home yet.
   Take it to don the hat, then click to cast a **blue lightning bolt**: it

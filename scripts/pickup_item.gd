@@ -5,6 +5,7 @@ extends RigidBody3D
 ## the World broadcasts each physics frame, same pattern as the player.
 
 @export var throw_force := 9.0
+@export var pickup_prompt := "Pick Up" # what the E-prompt says while it's on the ground
 
 var carried_by: int = -1 # peer_id, or -1 if not held
 
@@ -58,7 +59,7 @@ func throw_from(by: Node3D) -> void:
 
 
 func get_interact_prompt() -> String:
-	return "Pick Up" if carried_by == -1 else "..."
+	return pickup_prompt if carried_by == -1 else "..."
 
 
 func apply_remote_state(state: Dictionary) -> void:
