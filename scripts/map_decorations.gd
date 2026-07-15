@@ -159,6 +159,11 @@ const MOON_CENTER := Vector3(400, 260, 400)  # lunar disc center (floor top ~260
 const MOON_RADIUS := 22.0
 const MOON_GRAY := Color(0.6, 0.6, 0.65, 1)
 const MOON_CRATER_GRAY := Color(0.45, 0.45, 0.5, 1)
+## Moon meshes only render within this camera distance: far enough to cover
+## everything seen FROM the moon (shell interior ~110m, stars ~104m, arrival
+## from ~15m up), short of the hub ~620m away -- so from the ground the area
+## simply doesn't exist, instead of the shell reading as a black orb in the sky.
+const MOON_VISIBLE_RANGE := 350.0
 
 const DUNGEON_ROCK := Color(0.26, 0.24, 0.28, 1)
 const DUNGEON_FLOOR := Color(0.3, 0.28, 0.32, 1)
@@ -1005,6 +1010,12 @@ func _build_tower() -> void:
 
 func _build_moon() -> void:
 	var c := MOON_CENTER
+	# Everything built below gets a visibility range: the whole area only
+	# renders when the camera is within MOON_VISIBLE_RANGE of it. From the hub
+	# (600+ m away) the moon, shell, and stars simply don't exist -- otherwise
+	# the inside-out shell reads as a huge black orb hanging in the daytime
+	# sky (an inside-out sphere still shows its far interior from outside).
+	var first_new := get_child_count()
 	# The lunar surface: a thick gray disc. Slightly proud rim so careless
 	# walkers get a hint before the drop -- but every edge IS the exit.
 	_add_cylinder(c, MOON_RADIUS, MOON_RADIUS + 0.6, 1.2, MOON_GRAY)
@@ -1096,6 +1107,18 @@ func _build_moon() -> void:
 		blotch.material_override = land_mat
 		blotch.position = earth_c + dir * 8.2
 		add_child(blotch)
+
+	for i in range(first_new, get_child_count()):
+		_limit_visibility(get_child(i), MOON_VISIBLE_RANGE)
+
+
+## Recursively cap how far away a node's meshes render. Used to keep the moon
+## invisible from the hub without any per-frame logic.
+func _limit_visibility(node: Node, range_end: float) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).visibility_range_end = range_end
+	for child in node.get_children():
+		_limit_visibility(child, range_end)
 
 
 # --- the boss dungeon (buried in the void east of the forest) -------------------
