@@ -180,8 +180,12 @@ audio and minimal feedback.*
 - [ ] **Water dragon raid (Level C)** — Stage 1 built: the flooded arena
       geometry only (winding dry path, four deep pools + underwater catch-floors,
       shallow wading water, half-sunk pirate ship, rock shell + ceiling, teal
-      lighting), buried directly below the gem caverns. Pending: Stage 2 (the
-      serpent + its arc-dive motion), Stage 3 (Phase-1 combat loop: surface →
+      lighting), buried directly below the gem caverns. Stage 2 built: the
+      serpent itself (Ryujin/Glaurung head -- horns, whiskers, amber eyes -- and
+      a taper of finned segments that trail the head by arc-length) endlessly
+      arcing between the four pools, erupting from one and plunging into the
+      next; server sims the arc, the head pose rides the World snapshot, and
+      every peer trails the body locally. Pending: Stage 3 (Phase-1 combat loop: surface →
       head flops → strike top of head → recoil, 3 hits, lose-by-deep-water),
       Stage 4 (phases 2-3, water attacks, enrage, draconite jewel reward),
       Stage 5 (telegraph polish). Access from Level B — unlocked by the red gem —

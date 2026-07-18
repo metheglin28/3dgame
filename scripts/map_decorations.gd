@@ -27,6 +27,7 @@ const SKULL_STAKE_SCENE := preload("res://scenes/skull_stake.tscn")
 const WIZARD_HAT_PICKUP_SCENE := preload("res://scenes/wizard_hat_pickup.tscn")
 const BUNNY_SCENE := preload("res://scenes/bunny.tscn")
 const BUNNY_MAN_SCENE := preload("res://scenes/bunny_man.tscn")
+const DRAGON_SCENE := preload("res://scenes/dragon.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -1276,6 +1277,18 @@ func _build_flooded_arena() -> void:
 	var barrel_spots := [Vector2(-9, -20), Vector2(6, -8), Vector2(-6, 16), Vector2(13, 3)]
 	for bs in barrel_spots:
 		_add_cylinder(Vector3(bs.x, FLOOD_SHALLOW_Y + 0.7, bs.y), 0.55, 0.55, 1.4, SHIP_WOOD)
+
+	# --- the water dragon: endlessly arcs between the four deep pools ---
+	# (Stage 2 -- motion only; it lives here even without access wired up yet.)
+	var dragon := DRAGON_SCENE.instantiate()
+	var dpools: Array[Vector2] = []
+	for p in FLOOD_POOLS:
+		dpools.append(Vector2(p.x, p.y))
+	dragon.pools = dpools
+	dragon.water_y = FLOOD_WATER_Y
+	dragon.deep_y = FLOOD_DEEP_Y + 3.0
+	dragon.apex_y = FLOOD_CEIL_Y - 6.0
+	add_child(dragon)
 
 	# --- lighting: a dim teal glow strung the length of the cavern ---
 	for lz in [-22.0, -8.0, 6.0, 20.0]:

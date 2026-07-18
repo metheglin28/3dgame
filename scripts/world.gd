@@ -138,7 +138,7 @@ func _physics_process(delta: float) -> void:
 	GameDirector.tick(delta)
 	_enforce_kill_plane()
 	_enforce_moon_planes()
-	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}, "director": GameDirector.net_state()}
+	var snapshot := {"players": {}, "items": {}, "npcs": {}, "projectiles": {}, "dragon": {}, "director": GameDirector.net_state()}
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
 		# "rot" is the MESH facing, not the body -- the body root never rotates
@@ -150,6 +150,8 @@ func _physics_process(delta: float) -> void:
 		snapshot["npcs"][npc.get_path()] = {"pos": npc.global_position, "rot": npc.rotation.y, "tumble": npc.tumble, "slow": npc.is_slowed()}
 	for proj in get_tree().get_nodes_in_group("sync_projectiles"):
 		snapshot["projectiles"][proj.get_path()] = {"xform": proj.global_transform}
+	for dragon in get_tree().get_nodes_in_group("sync_dragon"):
+		snapshot["dragon"][dragon.get_path()] = {"head": dragon.head_root.global_transform}
 	_apply_snapshot.rpc(snapshot)
 
 
@@ -171,6 +173,10 @@ func _apply_snapshot(snapshot: Dictionary) -> void:
 		var proj := get_node_or_null(path)
 		if proj:
 			proj.apply_remote_state(snapshot["projectiles"][path])
+	for path in snapshot.get("dragon", {}):
+		var dragon := get_node_or_null(path)
+		if dragon:
+			dragon.apply_remote_state(snapshot["dragon"][path])
 	GameDirector.apply_net_state(snapshot["director"])
 
 
