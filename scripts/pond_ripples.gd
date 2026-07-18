@@ -12,7 +12,8 @@ extends Node3D
 ##
 ## The node sits AT the water surface, so its own y is the waterline.
 
-var half := 5.6  # square water half-extent
+var half := 5.6  # water half-extent along X (and Z, unless half_z is set)
+var half_z := 0.0  # if > 0, a separate Z half-extent (rectangular water, e.g. the flooded arena)
 
 const RIPPLE_INTERVAL := 0.35
 const MIN_WADE_SPEED := 1.0
@@ -27,8 +28,9 @@ func _ready() -> void:
 
 ## Is this (feet) position standing in the water?
 func is_wading(p: Vector3) -> bool:
+	var hz := half_z if half_z > 0.0 else half
 	return absf(p.x - global_position.x) < half - 0.3 \
-		and absf(p.z - global_position.z) < half - 0.3 \
+		and absf(p.z - global_position.z) < hz - 0.3 \
 		and p.y < global_position.y + 0.15 and p.y > global_position.y - 2.0
 
 

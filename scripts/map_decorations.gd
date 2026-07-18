@@ -166,6 +166,40 @@ const MOON_CRATER_GRAY := Color(0.45, 0.45, 0.5, 1)
 ## simply doesn't exist, instead of the shell reading as a black orb in the sky.
 const MOON_VISIBLE_RANGE := 350.0
 
+## --- Level C: the flooded raid arena (deep below the gem caverns) ----------
+## A drowned sea-cave (the water dragon's lair). A winding DRY PATH climbs from
+## the entrance up through SHALLOW WATER, ringed by four DEEP POOLS the dragon
+## dives between -- fall into a deep pool and you drown (out). A half-sunk pirate
+## ship gives elevation. The top pool is where the dragon surfaces to be struck.
+## Sits directly beneath the gem caverns; players descend to it from Level B
+## (access + the dragon itself come in later stages -- this is geometry only).
+const FLOOD_CENTER := Vector2(0, 0)  # arena center, world XZ (below the caverns)
+const FLOOD_HALF_X := 17.0
+const FLOOD_HALF_Z := 28.0
+const FLOOD_SHALLOW_Y := -40.0  # shallow mud floor (sits just under the water)
+const FLOOD_DRY_Y := -39.5       # dry-path top (pokes just above the water)
+const FLOOD_WATER_Y := -39.65    # water surface
+const FLOOD_DEEP_Y := -52.0      # deep-pool bottom
+const FLOOD_CEIL_Y := -18.0      # ~22m of air above the water for the dragon's arcs
+const FLOOD_MUD := Color(0.32, 0.37, 0.4, 1)
+const FLOOD_DEEP := Color(0.05, 0.11, 0.17, 1)
+const FLOOD_DRY := Color(0.5, 0.46, 0.4, 1)
+const FLOOD_ROCK := Color(0.16, 0.19, 0.23, 1)
+const SEA_WATER := Color(0.16, 0.42, 0.6, 0.62)
+const SHIP_WOOD := Color(0.3, 0.2, 0.12, 1)
+## Each pool: x, z (world), radius. First is the TOP strike pool.
+const FLOOD_POOLS: Array[Vector3] = [
+	Vector3(-3, 23, 7),    # top -- dragon surfaces here to be hit
+	Vector3(10, 11, 8),    # upper-right
+	Vector3(-12, -1, 8),   # mid-left
+	Vector3(10, -17, 8),   # lower-right
+]
+## Dry-path centerline, entrance (bottom) winding up to the top pool.
+const FLOOD_PATH: Array[Vector2] = [
+	Vector2(0, -27), Vector2(3, -14), Vector2(-3, 3), Vector2(2, 14), Vector2(-3, 20),
+]
+const FLOOD_SHIP := Vector2(9, -3)
+
 const DUNGEON_ROCK := Color(0.26, 0.24, 0.28, 1)
 const DUNGEON_FLOOR := Color(0.3, 0.28, 0.32, 1)
 const DUNGEON_CEILING_COLOR := Color(0.12, 0.11, 0.14, 1)
@@ -258,6 +292,7 @@ func _ready() -> void:
 	_build_tower()
 	_build_dungeon()
 	_build_moon()
+	_build_flooded_arena()
 
 
 # --- primitive helpers --------------------------------------------------------
@@ -1125,6 +1160,131 @@ func _limit_visibility(node: Node, range_end: float) -> void:
 		(node as GeometryInstance3D).visibility_range_end = range_end
 	for child in node.get_children():
 		_limit_visibility(child, range_end)
+
+
+# --- the flooded raid arena (Level C, buried directly below the gem caverns) ----
+
+## The water dragon's drowned lair. A winding DRY PATH (just above the waterline)
+## climbs from the entrance ledge up through ankle-deep SHALLOW WATER, threaded
+## between four DEEP POOLS the serpent dives amongst -- fall into a deep pool and
+## you drown (out). A half-sunk pirate ship gives high ground. The top pool is
+## where the dragon surfaces, head flopping to the floor, to be struck. Nothing
+## here has access wired up yet and the dragon isn't built -- this is geometry
+## only, rendered top-down to check the layout reads.
+func _build_flooded_arena() -> void:
+	var c := FLOOD_CENTER
+	var minx := c.x - FLOOD_HALF_X
+	var minz := c.y - FLOOD_HALF_Z
+	var full := Rect2(Vector2(minx, minz), Vector2(FLOOD_HALF_X * 2.0, FLOOD_HALF_Z * 2.0))
+
+	# --- shallow mud floor: the whole arena minus a square hole at each pool ---
+	# One BoxShape can't have a hole, so the slab is tiled as the pieces left after
+	# cutting a square (0.7 * radius, comfortably inside the round ring below) out
+	# around each pool. Everything's underwater and dim, so square-vs-round on the
+	# opening never shows -- the cosmetic ring rounds what little the eye catches.
+	var floor_rects: Array = [full]
+	for p in FLOOD_POOLS:
+		var hs: float = p.z * 0.7
+		floor_rects = _rects_minus_rect(floor_rects, Rect2(Vector2(p.x - hs, p.y - hs), Vector2(hs * 2.0, hs * 2.0)))
+	var floor_thick := 1.5
+	for r in floor_rects:
+		var rc: Rect2 = r
+		_add_box(Vector3(rc.position.x + rc.size.x * 0.5, FLOOD_SHALLOW_Y - floor_thick * 0.5, rc.position.y + rc.size.y * 0.5),
+			Vector3(rc.size.x, floor_thick, rc.size.y), FLOOD_MUD)
+
+	# --- the four deep pools: a dark catch-floor at the bottom + a rock ring ---
+	for p in FLOOD_POOLS:
+		_add_cylinder(Vector3(p.x, FLOOD_DEEP_Y, p.y), p.z + 0.6, p.z + 0.6, 0.5, FLOOD_DEEP)
+		var ring_h := FLOOD_SHALLOW_Y - FLOOD_DEEP_Y
+		_add_ring(Vector3(p.x, (FLOOD_SHALLOW_Y + FLOOD_DEEP_Y) * 0.5, p.y), p.z, ring_h, FLOOD_ROCK)
+
+	# --- the winding dry path: raised strips just proud of the waterline ---
+	var path_w := 5.0
+	var dry_thick := 0.9
+	for i in range(FLOOD_PATH.size() - 1):
+		var a := FLOOD_PATH[i]
+		var b := FLOOD_PATH[i + 1]
+		var mid := (a + b) * 0.5
+		var seg := b - a
+		var yaw := atan2(seg.x, seg.y)
+		_add_yaw_box(Vector3(mid.x, FLOOD_DRY_Y - dry_thick * 0.5, mid.y),
+			Vector3(path_w, dry_thick, seg.length() + path_w), yaw, FLOOD_DRY)
+	for wp in FLOOD_PATH:
+		_add_box(Vector3(wp.x, FLOOD_DRY_Y - dry_thick * 0.5, wp.y), Vector3(path_w, dry_thick, path_w), FLOOD_DRY)
+	# A wider entrance ledge at the bottom of the path (where access will land).
+	var ent := FLOOD_PATH[0]
+	_add_box(Vector3(ent.x, FLOOD_DRY_Y - 0.45, ent.y - 1.5), Vector3(9, 0.9, 5), FLOOD_DRY)
+
+	# --- the water surface + wading zone (one big translucent rectangle) ---
+	var water := MeshInstance3D.new()
+	water.position = Vector3(c.x, FLOOD_WATER_Y, c.y)
+	var slab := BoxMesh.new()
+	slab.size = Vector3(FLOOD_HALF_X * 2.0, 0.04, FLOOD_HALF_Z * 2.0)
+	water.mesh = slab
+	var wmat := StandardMaterial3D.new()
+	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wmat.albedo_color = SEA_WATER
+	wmat.roughness = 0.12
+	wmat.metallic = 0.25
+	water.material_override = wmat
+	add_child(water)
+	var ripples: Node3D = POND_RIPPLES.new()
+	ripples.position = Vector3(c.x, FLOOD_WATER_Y, c.y)
+	ripples.half = FLOOD_HALF_X
+	ripples.half_z = FLOOD_HALF_Z
+	add_child(ripples)
+
+	# --- rock shell: four perimeter walls + a ceiling ~22m overhead ---
+	var wall_top := FLOOD_CEIL_Y
+	var wall_bot := FLOOD_DEEP_Y - 1.0
+	var wall_h := wall_top - wall_bot
+	var wall_cy := (wall_top + wall_bot) * 0.5
+	var wt := 1.5
+	_add_box(Vector3(c.x, wall_cy, minz - wt * 0.5), Vector3(FLOOD_HALF_X * 2.0 + wt * 2.0, wall_h, wt), FLOOD_ROCK)
+	_add_box(Vector3(c.x, wall_cy, c.y + FLOOD_HALF_Z + wt * 0.5), Vector3(FLOOD_HALF_X * 2.0 + wt * 2.0, wall_h, wt), FLOOD_ROCK)
+	_add_box(Vector3(minx - wt * 0.5, wall_cy, c.y), Vector3(wt, wall_h, FLOOD_HALF_Z * 2.0), FLOOD_ROCK)
+	_add_box(Vector3(c.x + FLOOD_HALF_X + wt * 0.5, wall_cy, c.y), Vector3(wt, wall_h, FLOOD_HALF_Z * 2.0), FLOOD_ROCK)
+	_add_visual_slab(Vector3(c.x, FLOOD_CEIL_Y, c.y), Vector3(FLOOD_HALF_X * 2.0, 0.5, FLOOD_HALF_Z * 2.0), DUNGEON_CEILING_COLOR)
+
+	# --- the half-sunk pirate ship: walkable deck of raised ground ---
+	var s := FLOOD_SHIP
+	var ship_yaw := 0.35
+	_add_yaw_box(Vector3(s.x, -42.2, s.y), Vector3(5.5, 3.6, 12.0), ship_yaw, SHIP_WOOD)      # hull, sunk into the mud
+	_add_yaw_box(Vector3(s.x, -39.1, s.y), Vector3(6.0, 1.0, 12.6), ship_yaw, SHIP_WOOD)      # deck (top ~-38.6, above water)
+	var fwd := Vector2(sin(ship_yaw), cos(ship_yaw))     # ship's long axis in XZ
+	var side := Vector2(cos(ship_yaw), -sin(ship_yaw))   # across the deck
+	# Low gunwale rails down both sides so the deck reads as a ship, not a raft.
+	for sgn in [-1.0, 1.0]:
+		var rc: Vector2 = s + side * (2.9 * sgn)
+		_add_yaw_box(Vector3(rc.x, -37.9, rc.y), Vector3(0.4, 0.7, 12.0), ship_yaw, SHIP_WOOD)
+	# A snapped mast leaning off the deck.
+	var mast_base := s + fwd * 1.5
+	var mast := MeshInstance3D.new()
+	mast.position = Vector3(mast_base.x, -36.0, mast_base.y)
+	mast.rotation = Vector3(0.35, ship_yaw, 0.0)
+	var mm := CylinderMesh.new()
+	mm.top_radius = 0.18
+	mm.bottom_radius = 0.28
+	mm.height = 6.0
+	mast.mesh = mm
+	mast.material_override = _make_material(SHIP_WOOD)
+	add_child(mast)
+
+	# --- sea dressing: a scatter of drifted barrels on the mud ---
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0x5EA
+	var barrel_spots := [Vector2(-9, -20), Vector2(6, -8), Vector2(-6, 16), Vector2(13, 3)]
+	for bs in barrel_spots:
+		_add_cylinder(Vector3(bs.x, FLOOD_SHALLOW_Y + 0.7, bs.y), 0.55, 0.55, 1.4, SHIP_WOOD)
+
+	# --- lighting: a dim teal glow strung the length of the cavern ---
+	for lz in [-22.0, -8.0, 6.0, 20.0]:
+		var light := OmniLight3D.new()
+		light.position = Vector3(c.x, FLOOD_CEIL_Y - 4.0, lz)
+		light.light_color = Color(0.55, 0.8, 0.85)
+		light.light_energy = 2.2
+		light.omni_range = 26.0
+		add_child(light)
 
 
 # --- the boss dungeon (buried in the void east of the forest) -------------------

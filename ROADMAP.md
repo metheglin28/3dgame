@@ -177,8 +177,19 @@ audio and minimal feedback.*
       teleport planes + low-grav band. Pending: Stage 2 (Moon Ears — the
       bunny-ears variation) and Stage 3 (the easter egg hunt mini-game).
 
+- [ ] **Water dragon raid (Level C)** — Stage 1 built: the flooded arena
+      geometry only (winding dry path, four deep pools + underwater catch-floors,
+      shallow wading water, half-sunk pirate ship, rock shell + ceiling, teal
+      lighting), buried directly below the gem caverns. Pending: Stage 2 (the
+      serpent + its arc-dive motion), Stage 3 (Phase-1 combat loop: surface →
+      head flops → strike top of head → recoil, 3 hits, lose-by-deep-water),
+      Stage 4 (phases 2-3, water attacks, enrage, draconite jewel reward),
+      Stage 5 (telegraph polish). Access from Level B — unlocked by the red gem —
+      also still to wire up.
+
 - [ ] **Gem caverns (Level B)** — built but sealed; give it a purpose (a mode
-      arena? a coop objective?) or cut it.
+      arena? a coop objective?) or cut it. Now also the intended gateway down to
+      the water dragon raid (Level C).
 - [ ] **Stone tower interior** — empty; candidate Sumo arena or KotH spot.
 - [x] **Troll** — DONE; landed as the Goblin Siege boss (Phase 4).
 - [ ] **Powers** — currently mutually exclusive novelties; decide their role in
