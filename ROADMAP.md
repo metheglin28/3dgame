@@ -192,10 +192,17 @@ audio and minimal feedback.*
       into the pool; three hits fell it (roam → rise → expose → recoil, then
       DEFEATED → sinks). Falling into a deep pool is the players' own lose (the
       arena is exempt from the global kill plane and runs its own fall-in rule:
-      spectate during a live fight, else back to the entrance ledge). Pending:
-      Stage 4 (phases 2-3, water attacks, enrage, draconite jewel reward),
-      Stage 5 (telegraph polish). Access from Level B — unlocked by the red gem —
-      and gating the fight on the raid actually starting also still to wire up.
+      spectate during a live fight, else back to the entrance ledge). Stage 4
+      built: the fight is now gated -- the dragon lurks DORMANT in the top pool
+      until a draconite altar on the entrance ledge rouses it (begin_raid). Each
+      hit escalates the PHASE (1->3): faster roams, a shrinking exposed window,
+      and dives that throw SPLASH WAVES knocking players around the pools (phase
+      2 on dives; phase 3 ENRAGED -- red-eyed, waves on dives and emerges).
+      Beaten, it sinks and yields the draconite jewel (parked in the rock, lifted
+      to the floor by the top pool on defeat; a new holdable/throwable pickup).
+      Pending: Stage 5 (telegraph polish). Access from Level B — the descent
+      shaft + red-gem socket that actually lets players reach the arena — is the
+      remaining piece.
 
 - [ ] **Gem caverns (Level B)** — built but sealed; give it a purpose (a mode
       arena? a coop objective?) or cut it. Now also the intended gateway down to

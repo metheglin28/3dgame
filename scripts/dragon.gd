@@ -1,23 +1,26 @@
 extends Node3D
 ## The water dragon -- a serpent modelled after Ryujin and Glaurung.
 ##
-## MOTION: it endlessly ARCS between the flooded arena's deep pools -- erupting
-## from one, sailing over the water, and plunging into the next (the underwater
-## crawlspace between pools is lore; the head just dips below the dim surface at
-## each arc end and re-emerges at the next).
+## MOTION: it ARCS between the flooded arena's deep pools -- erupting from one,
+## sailing over the water, and plunging into the next (the underwater crawlspace
+## between pools is lore; the head just dips below the dim surface at each arc
+## end and re-emerges at the next).
 ##
-## COMBAT (Phase 1): after a spell of roaming it surfaces at the TOP pool, rears
-## up (the telegraph), and flops its head down onto the floor -- EXPOSED, its
-## crown weak point glowing. Strike the top of the head while it's down and it
-## recoils back into the pool. Three strikes fell it. Falling into a deep pool
-## is the players' own failure state (handled in world.gd). Phases 2-3 (extra
-## attacks, enrage) and the draconite reward land in Stage 4.
+## COMBAT: dormant until the altar rouses it (begin_raid). Then it roams, and
+## after a spell surfaces at the TOP pool, rears up (the telegraph) and flops its
+## head onto the floor -- EXPOSED, crown weak point glowing. Stomp the crown to
+## land a hit; three hits fell it. Each hit escalates the PHASE (1->3): it moves
+## faster, the exposed window shrinks, and its dives throw SPLASH WAVES that
+## knock players around the pools (phase 2 on dives; phase 3 ENRAGED -- red-eyed,
+## waves on dives and emerges). Falling into a deep pool is the players' own lose
+## (world.gd). Beaten, it sinks and yields the draconite jewel.
 ##
 ## Server-authoritative: only the server runs the state machine; the head pose,
-## the vulnerable flag and the hit count ride the World's per-frame snapshot,
-## and every peer trails the body + mirrors the glow locally.
+## the vulnerable flag, the hit count and the enrage flag ride the World's
+## per-frame snapshot, splash rings replicate by RPC, and every peer trails the
+## body + mirrors the glow locally.
 
-enum State { ROAM, RISING, EXPOSED, RECOIL, DEFEATED, DEAD }
+enum State { ROAM, RISING, EXPOSED, RECOIL, DEFEATED, DEAD, DORMANT }
 
 # Configured by map_decorations before the node enters the tree.
 var pools: Array = []          # Array[Vector2], world XZ of each deep pool
@@ -26,20 +29,24 @@ var deep_y := -49.0            # how deep the head sinks at each arc end
 var apex_y := -24.0            # arc peak height
 
 const TOUR: Array[int] = [0, 3, 1, 2]  # pool visiting order -- long criss-cross arcs
-const HOP_SPEED := 9.0         # target horizontal m/s; hop duration scales with span
-const HOP_MIN_DUR := 1.6
+const HOP_MIN_DUR := 1.4
 
-const ROAM_TIME := 9.0         # how long it arcs before surfacing to be struck
-const RISE_DUR := 2.3          # rear-up + flop telegraph
-const EXPOSE_TIME := 4.5       # vulnerable window on the floor
-const RECOIL_DUR := 1.5        # rear back + dive away
+# Per-phase escalation (index = phase-1).
+const ROAM_BY_PHASE: Array[float] = [9.0, 7.0, 5.0]
+const EXPOSE_BY_PHASE: Array[float] = [4.5, 3.8, 3.0]
+const HOPSPEED_BY_PHASE: Array[float] = [9.0, 11.0, 13.5]
+const SPLASH_R_BY_PHASE: Array[float] = [0.0, 6.0, 8.0]     # 0 = no wave in phase 1
+const SPLASH_KB_BY_PHASE: Array[float] = [0.0, 12.0, 15.0]
+
+const RISE_DUR := 2.3
+const RECOIL_DUR := 1.5
 const DEATH_DUR := 3.0
 const HITS_TO_KILL := 3
-const STRIKE_R := 2.6          # horizontal reach of a strike on the crown
-const STRIKE_BOUNCE := 13.0    # upward pop the striker gets (a stomp)
+const STRIKE_R := 2.6
+const STRIKE_BOUNCE := 13.0
 
 const SEG_COUNT := 18
-const SEG_GAP := 1.05          # metres between segments along the body
+const SEG_GAP := 1.05
 const HEAD_R := 1.35
 
 const BODY_COL := Color(0.13, 0.42, 0.34)
@@ -48,30 +55,34 @@ const HEAD_COL := Color(0.10, 0.34, 0.30)
 const FIN_COL := Color(0.20, 0.58, 0.55)
 const HORN_COL := Color(0.86, 0.84, 0.72)
 const EYE_COL := Color(1.0, 0.75, 0.2)
+const EYE_RAGE := Color(1.0, 0.2, 0.12)
 const WEAK_COL := Color(1.0, 0.42, 0.2)
 
-var active := true             # Stage 4 will gate this on the raid actually starting
+var armed := false             # has the raid been roused? (dormant until then)
 var hits := 0
 
 var head_root: Node3D
 var _weak: Node3D
 var _glow: MeshInstance3D
+var _eyes: Array[MeshInstance3D] = []
 var _head_meshes: Array[MeshInstance3D] = []
 var _segments: Array[Node3D] = []
 var _hist: PackedVector3Array = PackedVector3Array()
 
-var _state: int = State.ROAM
+var _state: int = State.DORMANT
 var _hop_i := 0
 var _t := 0.0
 var _hop_dur := 2.0
-var _roam_timer := ROAM_TIME
+var _roam_timer := 0.0
 var _want_surface := false
-var _phase_t := 0.0            # 0..1 progress through a scripted (non-roam) phase
+var _phase_t := 0.0
 var _expose_timer := 0.0
-var _struck := false           # a strike already landed this exposure
-var _vuln := false             # networked: crown is glowing / hittable
+var _struck := false
+var _vuln := false
+var _enraged := false
 var _flash := 0.0
 var _bob := 0.0
+var _prev_head_y := 0.0
 var _started := false
 
 
@@ -80,8 +91,9 @@ func _ready() -> void:
 	_build_head()
 	_build_body()
 	_recompute_hop_dur()
-	var start := _head_pose_roam()
+	var start := _dormant_pose()
 	head_root.global_transform = start
+	_prev_head_y = start.origin.y
 	var back := -start.basis.z
 	for i in range(SEG_COUNT * 4):
 		_hist.append(start.origin - back * (i * 0.4))
@@ -92,7 +104,25 @@ func _ready() -> void:
 
 ## True while the dragon is a live threat (used by the arena's fall-in rule).
 func fight_live() -> bool:
-	return active and _state != State.DEFEATED and _state != State.DEAD
+	return armed and _state != State.DEFEATED and _state != State.DEAD
+
+
+func is_defeated() -> bool:
+	return _state == State.DEFEATED or _state == State.DEAD
+
+
+## Server-only. Rouse the dormant dragon and start the raid.
+func begin_raid() -> void:
+	if not multiplayer.is_server() or armed or is_defeated():
+		return
+	armed = true
+	hits = 0
+	_state = State.ROAM
+	_hop_i = 0
+	_t = 0.0
+	_roam_timer = _roam_time()
+	_recompute_hop_dur()
+	_update_enrage()
 
 
 func _physics_process(delta: float) -> void:
@@ -103,6 +133,8 @@ func _physics_process(delta: float) -> void:
 		return  # clients are driven purely by apply_remote_state
 	_bob += delta
 	match _state:
+		State.DORMANT:
+			head_root.global_transform = _dormant_pose()
 		State.ROAM:
 			_tick_roam(delta)
 		State.RISING:
@@ -127,47 +159,64 @@ func apply_remote_state(state: Dictionary) -> void:
 	head_root.global_transform = state["head"]
 	hits = state.get("hits", hits)
 	_set_glow(state.get("vuln", false))
+	_set_enrage(state.get("enrage", false))
 	_hist.insert(0, head_root.global_position)
 	_trim_history()
 	_layout_body()
 
 
+# --- phase tuning -------------------------------------------------------------
+
+func phase() -> int:
+	return clampi(hits + 1, 1, 3)
+
+
+func _roam_time() -> float:
+	return ROAM_BY_PHASE[phase() - 1]
+
+
+func _expose_time() -> float:
+	return EXPOSE_BY_PHASE[phase() - 1]
+
+
+func _update_enrage() -> void:
+	_set_enrage(fight_live() and phase() == 3)
+
+
 # --- state ticks --------------------------------------------------------------
 
 func _tick_roam(delta: float) -> void:
-	if active:
+	if armed:
 		_roam_timer -= delta
 		if _roam_timer <= 0.0:
 			_want_surface = true
 	_advance_roam(delta)
-	# Slip into the rise only while underwater at the top pool, so the little
-	# snap to the pool's deep point never shows above the surface.
 	if _want_surface and head_root.global_position.y < water_y - 0.5 \
 			and Vector2(head_root.global_position.x, head_root.global_position.z).distance_to(_p0()) < 6.0:
 		_want_surface = false
 		_state = State.RISING
 		_phase_t = 0.0
 		head_root.global_transform = _look_transform(_deep_pt(), _deep_pt() + Vector3(0, 1, 0))
-	else:
-		head_root.global_transform = _head_pose_roam()
+		return
+	var tf := _head_pose_roam()
+	head_root.global_transform = tf
+	_maybe_splash(tf.origin)
 
 
 func _tick_rising(delta: float) -> void:
 	_phase_t += delta / RISE_DUR
 	var t := clampf(_phase_t, 0.0, 1.0)
 	if t < 0.5:
-		# Rear up out of the pool (telegraph).
 		var f := smoothstep(0.0, 1.0, t / 0.5)
 		var pos := _deep_pt().lerp(_rear_apex(), f)
 		head_root.global_transform = _look_transform(pos, pos + Vector3(0, 1.5, -1.0))
 	else:
-		# Flop the head forward and down onto the floor.
 		var f := smoothstep(0.0, 1.0, (t - 0.5) / 0.5)
 		var pos := _rear_apex().lerp(_flop_pos(), f)
 		head_root.global_transform = _rest_pose(pos)
 	if _phase_t >= 1.0:
 		_state = State.EXPOSED
-		_expose_timer = EXPOSE_TIME
+		_expose_timer = _expose_time()
 		_struck = false
 		_set_glow(true)
 
@@ -199,16 +248,17 @@ func _tick_recoil(delta: float) -> void:
 		if hits >= HITS_TO_KILL:
 			_state = State.DEFEATED
 			_phase_t = 0.0
+			_set_enrage(false)
+			_drop_reward()
 		else:
 			_state = State.ROAM
-			_roam_timer = ROAM_TIME
+			_roam_timer = _roam_time()
 			_hop_i = 0
 			_t = 0.0
 			_recompute_hop_dur()
 
 
 func _tick_defeated(delta: float) -> void:
-	# A final thrash, then sink to the pool floor and go still.
 	_phase_t += delta / DEATH_DUR
 	var t := clampf(_phase_t, 0.0, 1.0)
 	var thrash := sin(t * PI * 5.0) * (1.0 - t) * 2.0
@@ -217,6 +267,14 @@ func _tick_defeated(delta: float) -> void:
 	if _phase_t >= 1.0:
 		_state = State.DEAD
 
+
+func _dormant_pose() -> Transform3D:
+	# Lurking submerged in the top pool, coiled and gently stirring.
+	var p := _deep_pt() + Vector3(0, sin(_bob * 0.8) * 0.3, 0)
+	return _look_transform(p, p + Vector3(0.25, 1.0, 0.1))
+
+
+# --- strikes ------------------------------------------------------------------
 
 func _check_strikes() -> void:
 	var wp := _weak.global_position
@@ -234,8 +292,11 @@ func _register_strike(striker: Node3D) -> void:
 	_struck = true
 	hits += 1
 	_flash = 0.35
-	_play_strike.rpc()
-	# A Mario-stomp bounce off the crown.
+	if multiplayer.multiplayer_peer != null:
+		_play_strike.rpc()
+	else:
+		_play_strike()
+	_update_enrage()
 	if striker.has_method("apply_stomp_bounce"):
 		striker.apply_stomp_bounce(STRIKE_BOUNCE)
 	elif "velocity" in striker:
@@ -249,13 +310,97 @@ func _play_strike() -> void:
 	_apply_flash()
 
 
-# --- roam arc (unchanged from Stage 2) ----------------------------------------
+# --- splash-wave attack -------------------------------------------------------
+
+## Emit a wave when the head crosses the waterline near a pool: on dives from
+## phase 2, and on both dives and emerges once enraged.
+func _maybe_splash(pos: Vector3) -> void:
+	var y := pos.y
+	var py := _prev_head_y
+	_prev_head_y = y
+	if not armed:
+		return
+	var r: float = SPLASH_R_BY_PHASE[phase() - 1]
+	if r <= 0.0:
+		return
+	var line := water_y - 0.5
+	var down := py >= line and y < line
+	var up := py < line and y >= line
+	if down or (up and _enraged):
+		_splash(_nearest_pool(Vector2(pos.x, pos.z)), r, SPLASH_KB_BY_PHASE[phase() - 1])
+
+
+func _splash(center: Vector2, r: float, kb: float) -> void:
+	var c3 := Vector3(center.x, water_y, center.y)
+	for pl in get_tree().get_nodes_in_group("players"):
+		var p := pl as Node3D
+		if p == null or p.get("spectating"):
+			continue
+		var pp: Vector3 = p.global_position
+		if pp.y > water_y + 2.5 or pp.y < deep_y:
+			continue  # up on the ship / already fallen in
+		var flat := Vector2(pp.x - c3.x, pp.z - c3.z)
+		if flat.length() < r and p.has_method("apply_knockback"):
+			var dir := Vector3(flat.x, 0, flat.y)
+			if dir.length() < 0.1:
+				dir = Vector3.FORWARD
+			p.apply_knockback(dir.normalized(), kb)
+	if multiplayer.multiplayer_peer != null:
+		_play_splash.rpc(c3, r)
+	else:
+		_play_splash(c3, r)
+
+
+@rpc("authority", "call_local", "reliable")
+func _play_splash(center: Vector3, r: float) -> void:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.7
+	torus.outer_radius = 1.0
+	ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.8, 0.95, 1.0, 0.7)
+	ring.material_override = mat
+	add_child(ring)
+	ring.global_position = center + Vector3(0, 0.1, 0)
+	ring.scale = Vector3(1, 0.3, 1)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3(r, 0.3, r), 0.6)
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.6)
+	tween.chain().tween_callback(ring.queue_free)
+
+
+func _nearest_pool(p: Vector2) -> Vector2:
+	var best: Vector2 = pools[0]
+	var bd := INF
+	for q in pools:
+		var d: float = p.distance_to(q)
+		if d < bd:
+			bd = d
+			best = q
+	return best
+
+
+# --- reward -------------------------------------------------------------------
+
+## Server-only. Beaten: bring the draconite up from where the head sank, resting
+## on the floor beside the top pool for the players to collect.
+func _drop_reward() -> void:
+	if not multiplayer.is_server():
+		return
+	for n in get_tree().get_nodes_in_group("draconite_reward"):
+		(n as Node3D).global_position = Vector3(_p0().x, -38.2, _p0().y - 5.0)
+
+
+# --- roam arc -----------------------------------------------------------------
 
 func _advance_roam(delta: float) -> void:
 	_t += delta / _hop_dur
 	while _t >= 1.0:
 		_t -= 1.0
-		# When it's time to surface, steer the next hop at the top pool.
 		if _want_surface:
 			_hop_i = _index_of_hop_into(0)
 		else:
@@ -263,7 +408,6 @@ func _advance_roam(delta: float) -> void:
 		_recompute_hop_dur()
 
 
-## The tour position whose NEXT pool is `pool_idx` (so this hop dives into it).
 func _index_of_hop_into(pool_idx: int) -> int:
 	for i in range(TOUR.size()):
 		if TOUR[(i + 1) % TOUR.size()] == pool_idx:
@@ -274,7 +418,7 @@ func _index_of_hop_into(pool_idx: int) -> int:
 func _recompute_hop_dur() -> void:
 	var a: Vector2 = pools[TOUR[_hop_i]]
 	var b: Vector2 = pools[TOUR[(_hop_i + 1) % TOUR.size()]]
-	_hop_dur = maxf(HOP_MIN_DUR, a.distance_to(b) / HOP_SPEED)
+	_hop_dur = maxf(HOP_MIN_DUR, a.distance_to(b) / HOPSPEED_BY_PHASE[phase() - 1])
 
 
 func _head_pose_roam() -> Transform3D:
@@ -307,12 +451,9 @@ func _rear_apex() -> Vector3:
 
 
 func _flop_pos() -> Vector3:
-	# Head laid on the floor just inside the pool, toward the arena / dry path.
 	return Vector3(_p0().x, -39.0, _p0().y - 5.0)
 
 
-## A resting transform: snout tipped down and forward so the crown faces up and
-## the weak point sits proud on top.
 func _rest_pose(pos: Vector3) -> Transform3D:
 	return _look_transform(pos, pos + Vector3(0, -0.35, -1.0))
 
@@ -360,12 +501,24 @@ func _point_at_distance(d: float) -> Vector3:
 	return _hist[_hist.size() - 1]
 
 
-# --- glow / flash -------------------------------------------------------------
+# --- glow / flash / enrage ----------------------------------------------------
 
 func _set_glow(v: bool) -> void:
 	_vuln = v
 	if _glow:
 		_glow.visible = v
+
+
+func _set_enrage(v: bool) -> void:
+	if v == _enraged:
+		return
+	_enraged = v
+	var col := EYE_RAGE if v else EYE_COL
+	for eye in _eyes:
+		var mat := eye.material_override as StandardMaterial3D
+		if mat:
+			mat.albedo_color = col
+			mat.emission = col
 
 
 func _apply_flash() -> void:
@@ -395,7 +548,7 @@ func _build_head() -> void:
 		m.position = Vector3(0.55 * sx, 0.9, 0.7)
 		m.rotation = Vector3(2.4, 0.0, -0.25 * sx)
 		head_root.add_child(m)
-		_emis_on(head_root, _sphere_mesh(0.26, EYE_COL), Vector3(0.62 * sx, 0.25, -1.35), EYE_COL, 1.4)
+		_eyes.append(_emis_on(head_root, _sphere_mesh(0.26, EYE_COL), Vector3(0.62 * sx, 0.25, -1.35), EYE_COL, 1.4))
 	for k in range(3):
 		var spike := _cone_mesh(0.0, 0.22, 0.9 - k * 0.12, FIN_COL)
 		var sm := MeshInstance3D.new()
@@ -409,7 +562,6 @@ func _build_head() -> void:
 		wm.position = Vector3(0.7 * sx, -0.2, -1.9)
 		wm.rotation = Vector3(-1.7, 0.2 * sx, 0.0)
 		head_root.add_child(wm)
-	# The weak point on the crown + its glow (shown only while vulnerable).
 	_weak = Node3D.new()
 	_weak.name = "Weakpoint"
 	_weak.position = Vector3(0, HEAD_R, -0.2)
@@ -451,15 +603,13 @@ func _mesh_on(parent: Node3D, mesh: Mesh, pos: Vector3) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = mesh
 	m.position = pos
-	# Give every head/body piece its own material override so the strike flash
-	# can drive emission without disturbing the shared mesh materials.
 	if mesh is PrimitiveMesh and (mesh as PrimitiveMesh).material is StandardMaterial3D:
 		m.material_override = ((mesh as PrimitiveMesh).material as StandardMaterial3D).duplicate()
 	parent.add_child(m)
 	return m
 
 
-func _emis_on(parent: Node3D, mesh: Mesh, pos: Vector3, col: Color, energy: float) -> void:
+func _emis_on(parent: Node3D, mesh: Mesh, pos: Vector3, col: Color, energy: float) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = mesh
 	m.position = pos
@@ -470,6 +620,7 @@ func _emis_on(parent: Node3D, mesh: Mesh, pos: Vector3, col: Color, energy: floa
 	mat.emission_energy_multiplier = energy
 	m.material_override = mat
 	parent.add_child(m)
+	return m
 
 
 func _sphere_mesh(r: float, col: Color) -> SphereMesh:

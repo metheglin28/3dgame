@@ -28,6 +28,8 @@ const WIZARD_HAT_PICKUP_SCENE := preload("res://scenes/wizard_hat_pickup.tscn")
 const BUNNY_SCENE := preload("res://scenes/bunny.tscn")
 const BUNNY_MAN_SCENE := preload("res://scenes/bunny_man.tscn")
 const DRAGON_SCENE := preload("res://scenes/dragon.tscn")
+const DRACONITE_SCENE := preload("res://scenes/draconite.tscn")
+const DRAGON_ALTAR_SCENE := preload("res://scenes/dragon_altar.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -1289,6 +1291,21 @@ func _build_flooded_arena() -> void:
 	dragon.deep_y = FLOOD_DEEP_Y + 3.0
 	dragon.apex_y = FLOOD_CEIL_Y - 6.0
 	add_child(dragon)
+
+	# The altar on the entrance ledge -- interacting rouses the dragon. Until
+	# then it lurks dormant in the top pool.
+	var altar := DRAGON_ALTAR_SCENE.instantiate()
+	altar.position = Vector3(FLOOD_PATH[0].x + 2.2, FLOOD_DRY_Y, FLOOD_PATH[0].y + 1.5)
+	add_child(altar)
+
+	# The draconite reward, parked deep in the rock until the dragon is beaten
+	# (dragon._drop_reward lifts it to the floor by the top pool). It rides the
+	# item snapshot like any prop, so it's already networked wherever it sits.
+	var draconite := DRACONITE_SCENE.instantiate()
+	draconite.position = Vector3(FLOOD_CENTER.x, FLOOD_DEEP_Y - 8.0, FLOOD_CENTER.y)
+	draconite.freeze = true
+	draconite.add_to_group("draconite_reward")
+	add_child(draconite)
 
 	# --- lighting: a dim teal glow strung the length of the cavern ---
 	for lz in [-22.0, -8.0, 6.0, 20.0]:

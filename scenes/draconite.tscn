@@ -1,0 +1,63 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/pickup_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/interactable.gd" id="2"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_drac"]
+albedo_color = Color(0.72, 0.95, 0.98, 1)
+metallic = 0.5
+roughness = 0.08
+emission_enabled = true
+emission = Color(0.45, 0.85, 0.95, 1)
+emission_energy_multiplier = 1.1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_spire"]
+top_radius = 0.0
+bottom_radius = 0.34
+height = 1.0
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_base"]
+top_radius = 0.34
+bottom_radius = 0.0
+height = 0.6
+radial_segments = 5
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(0.75, 1.5, 0.75)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_interact"]
+size = Vector3(1.6, 1.9, 1.6)
+
+[node name="Draconite" type="RigidBody3D"]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1")
+pickup_prompt = "Take the Draconite"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_body")
+
+[node name="Spire" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("CylinderMesh_spire")
+surface_material_override/0 = SubResource("StandardMaterial3D_drac")
+
+[node name="Base" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+mesh = SubResource("CylinderMesh_base")
+surface_material_override/0 = SubResource("StandardMaterial3D_drac")
+
+[node name="Glow" type="OmniLight3D" parent="."]
+light_color = Color(0.5, 0.88, 0.98, 1)
+light_energy = 1.6
+omni_range = 6.0
+
+[node name="Interactable" type="Area3D" parent="."]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("2")
+prompt_text = "Take the Draconite"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Interactable"]
+shape = SubResource("BoxShape3D_interact")

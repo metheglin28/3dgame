@@ -164,7 +164,7 @@ func _physics_process(delta: float) -> void:
 	for proj in get_tree().get_nodes_in_group("sync_projectiles"):
 		snapshot["projectiles"][proj.get_path()] = {"xform": proj.global_transform}
 	for dragon in get_tree().get_nodes_in_group("sync_dragon"):
-		snapshot["dragon"][dragon.get_path()] = {"head": dragon.head_root.global_transform, "vuln": dragon._vuln, "hits": dragon.hits}
+		snapshot["dragon"][dragon.get_path()] = {"head": dragon.head_root.global_transform, "vuln": dragon._vuln, "hits": dragon.hits, "enrage": dragon._enraged}
 	_apply_snapshot.rpc(snapshot)
 
 
