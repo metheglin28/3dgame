@@ -204,9 +204,13 @@ audio and minimal feedback.*
       shaft + red-gem socket that actually lets players reach the arena — is the
       remaining piece.
 
-- [ ] **Gem caverns (Level B)** — built but sealed; give it a purpose (a mode
-      arena? a coop objective?) or cut it. Now also the intended gateway down to
-      the water dragon raid (Level C).
+- [ ] **Gem caverns (Level B)** — no longer sealed: a ramped corridor branches
+      off a Level A room under the CANYON quadrant (the tower/dungeon pattern)
+      and descends ~9m into a gem-cavern room, mouth marked "TO THE GEM CAVERNS".
+      Placed east of the canyon's surface entrance so they don't overlap; the
+      descent is a plain enclosed ramp for now. Still needs a purpose of its own
+      (a mode arena? a coop objective?). Next gateway to build: Level B → Level C
+      (the flooded raid), the entrance the red gem unlocks.
 - [ ] **Stone tower interior** — empty; candidate Sumo arena or KotH spot.
 - [x] **Troll** — DONE; landed as the Goblin Siege boss (Phase 4).
 - [ ] **Powers** — currently mutually exclusive novelties; decide their role in

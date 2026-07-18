@@ -277,8 +277,20 @@ const ENTRANCE_RUN := 7.0       # ramp horizontal run (4.9m rise -> ~35 deg)
 const ENTRANCE_LAND_LEN := 4.0  # the flat landing you drop onto, at the top
 const ENTRANCE_LAND_Y := -1.1   # ~1.1m below grade: a jumpable drop, in and out
 const ENTRANCE_HALF_W := 3.0    # open-trench half-width
-# The Level A <-> Level B connector shafts were removed; Level B (the gem
-# caverns) is sealed for now, until its access is redesigned.
+# The old vertical Level A <-> Level B connector shafts were removed. Level B
+# (the gem caverns) is now reached by ONE entrance: a ramped corridor that
+# branches off a Level A room under the CANYON quadrant -- the same way the
+# tower and boss-dungeon corridors branch off Level A -- and descends ~9m to a
+# gem-cavern room. Shaped as a plain ramped tunnel for now. It sits at x=30 --
+# EAST of the canyon's own surface entrance (which drops in around x=20), so the
+# two never overlap. The mouth is at a Level A room's south edge (open cell
+# 17,5); it drops north-and-down to a Level B room (cell 13,4). Level A's floor
+# is cut where the descent begins and Level B's ceiling where it arrives, so the
+# corridor's own shell seals every seam.
+const LEVELB_ENTRY_A := Vector3(30, LEVEL_A_Y, -32.5)   # mouth, at a Level A room edge (cell 17,5)
+const LEVELB_ENTRY_B := Vector3(30, LEVEL_B_Y, -15.0)   # lands in a Level B room (cell 13,4)
+const LEVELB_ENTRY_FLOOR_HOLES: Array[Vector2] = [Vector2(30, -30), Vector2(30, -26)]
+const LEVELB_ENTRY_CEIL_HOLES: Array[Rect2] = [Rect2(Vector2(27.6, -22.4), Vector2(4.8, 9.8))]
 
 
 func _ready() -> void:
@@ -1736,14 +1748,20 @@ func _build_tunnels() -> void:
 	# The dungeon corridor RAMPS DOWN through its gate cell (unlike the tower's
 	# flat corridor), so besides skipping the gate cell's rock, the Level A
 	# floor slab needs a hole there for the descent to pass through -- the
-	# corridor's own floor/walls/plugs reseal every edge of the cut.
-	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, [Vector2(55.5, 40)],
+	# corridor's own floor/walls/plugs reseal every edge of the cut. The Level B
+	# entrance descent needs the same treatment (its own floor holes under the
+	# canyon), so those are cut here too.
+	var a_floor_holes: Array = [Vector2(55.5, 40)]
+	a_floor_holes.append_array(LEVELB_ENTRY_FLOOR_HOLES)
+	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, a_floor_holes,
 		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL, DUNGEON_GATE_CELL], ceil_holes)
+	# Level B's ceiling is cut where the descent breaks into a gem-cavern room.
 	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [],
-		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true)
+		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true, [], LEVELB_ENTRY_CEIL_HOLES)
 
 	for biome in ENTRANCE_SHAFTS:
 		_build_entrance(biome)
+	_build_levelb_entrance()
 
 
 func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array,
@@ -1905,6 +1923,23 @@ func _build_entrance(biome: String) -> void:
 		_add_box(wc, _along(d, ENTRANCE_RUN + ENTRANCE_LAND_LEN + 0.5, 2.0, 0.4), TUNNEL_ROCK)
 	_add_torch(Vector3(foot.x, LEVEL_A_Y + 2.2, foot.z))
 	_add_sign(Vector3(m.x, 0, m.y) + d * (2.5 + ENTRANCE_RUN + ENTRANCE_LAND_LEN) + lat * (ENTRANCE_HALF_W + 1.2), "TO THE TUNNELS")
+
+
+## The Level A -> Level B entrance: a ramped corridor branching off a Level A
+## room under the canyon, descending ~9m to the gem caverns (same enclosed-
+## corridor build as the tower/dungeon, just sloped the whole way). The floor
+## and ceiling holes it needs are cut in _build_tunnels.
+func _build_levelb_entrance() -> void:
+	_add_corridor([
+		LEVELB_ENTRY_A + Vector3(0, 0.02, 0),   # mouth, opening -z into the Level A room
+		LEVELB_ENTRY_B + Vector3(0, 0.02, 0),   # arrives on a Level B room floor
+	], 2.2, 3.8)
+	# A sign at the mouth and torches strung down the dark descent.
+	_add_sign(Vector3(33.0, LEVEL_A_Y, -34.0), "TO THE GEM CAVERNS")
+	_add_torch(Vector3(30, LEVEL_A_Y + 2.0, -33.0))
+	_add_torch(Vector3(30, -8.5, -28.0))
+	_add_torch(Vector3(30, -11.5, -22.0))
+	_add_torch(Vector3(30, -13.5, -16.5))
 
 
 ## Open-ended tube. `cull` picks which single side renders (CylinderMesh
