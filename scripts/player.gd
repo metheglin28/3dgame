@@ -652,6 +652,18 @@ func apply_knockback(dir: Vector3, power: float, ragdoll_time: float = RAGDOLL_M
 	velocity = flat * power + Vector3.UP * power * 0.6
 
 
+## Server-only. Bounce straight up off something you stomped (the dragon's
+## crown). Clears any ragdoll so the pop lands clean, like jumping on a Goomba.
+func apply_stomp_bounce(power: float) -> void:
+	if not multiplayer.is_server():
+		return
+	ragdolled = false
+	_ragdoll_timer = 0.0
+	mesh.rotation.x = 0.0
+	velocity.y = power
+	_slamming = false
+
+
 ## Server-only. A troll-style hit: pushed back with control briefly cut, but no
 ## ragdoll, no tumble, and no immunity window. The snowball's punch.
 func apply_shove(dir: Vector3, power: float) -> void:

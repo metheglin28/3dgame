@@ -185,11 +185,17 @@ audio and minimal feedback.*
       a taper of finned segments that trail the head by arc-length) endlessly
       arcing between the four pools, erupting from one and plunging into the
       next; server sims the arc, the head pose rides the World snapshot, and
-      every peer trails the body locally. Pending: Stage 3 (Phase-1 combat loop: surface →
-      head flops → strike top of head → recoil, 3 hits, lose-by-deep-water),
+      every peer trails the body locally. Stage 3 built: the Phase-1 combat loop
+      -- after a roaming spell it surfaces at the top pool, rears up (telegraph),
+      and flops its head onto the floor EXPOSED with the crown weak point glowing;
+      stomp the crown while it's down (a Mario-style bounce off) and it recoils
+      into the pool; three hits fell it (roam → rise → expose → recoil, then
+      DEFEATED → sinks). Falling into a deep pool is the players' own lose (the
+      arena is exempt from the global kill plane and runs its own fall-in rule:
+      spectate during a live fight, else back to the entrance ledge). Pending:
       Stage 4 (phases 2-3, water attacks, enrage, draconite jewel reward),
       Stage 5 (telegraph polish). Access from Level B — unlocked by the red gem —
-      also still to wire up.
+      and gating the fight on the raid actually starting also still to wire up.
 
 - [ ] **Gem caverns (Level B)** — built but sealed; give it a purpose (a mode
       arena? a coop objective?) or cut it. Now also the intended gateway down to

@@ -21,11 +21,24 @@ const BOSS_GOBLIN_SKINS: Array[Color] = [
 	Color(0.33, 0.5, 0.22), Color(0.22, 0.36, 0.16), Color(0.6, 0.66, 0.3),
 ]
 
-# Kill plane. The only thing on the whole map that sits below this is the boss
-# dungeon's pit (arena disc at y=-16, catch floor at y=-40), so in practice this
-# only ever fires there: fall off the arena and you cross it before hitting the
-# floor. Players teleport back to a town spawn; NPCs despawn.
+# Kill plane. Below this sit the boss dungeon's pit (arena disc at y=-16, catch
+# floor at y=-40) and the flooded raid arena. Fall off the boss arena and you
+# cross it: players teleport back to a town spawn; NPCs despawn. The flooded
+# arena is EXEMPT (its whole floor is below this line) -- it has its own rule
+# below, keyed off falling into a deep pool rather than a flat height.
 const KILL_PLANE_Y := -34.0
+
+# The flooded raid arena (Level C, see map_decorations._build_flooded_arena).
+# Its walkable floor sits at y=-40 -- well under the kill plane -- so the global
+# plane can't apply there. Instead, dropping below FLOOD_DEEP_OUT_Y means you've
+# fallen into one of the deep pools: the players' own failure state. During a
+# live dragon fight that means spectating; otherwise you're set back on the
+# entrance ledge.
+const FLOOD_ARENA_HALF_X := 17.5
+const FLOOD_ARENA_HALF_Z := 28.5
+const FLOOD_ARENA_TOP_Y := -16.0
+const FLOOD_DEEP_OUT_Y := -42.5
+const FLOOD_ENTRANCE := Vector3(0, -38.2, -27.0)
 
 # The secret lunar area's teleport planes (see map_decorations._build_moon for
 # the place itself; the low-gravity band is in player.gd). Both are server-side
@@ -151,7 +164,7 @@ func _physics_process(delta: float) -> void:
 	for proj in get_tree().get_nodes_in_group("sync_projectiles"):
 		snapshot["projectiles"][proj.get_path()] = {"xform": proj.global_transform}
 	for dragon in get_tree().get_nodes_in_group("sync_dragon"):
-		snapshot["dragon"][dragon.get_path()] = {"head": dragon.head_root.global_transform}
+		snapshot["dragon"][dragon.get_path()] = {"head": dragon.head_root.global_transform, "vuln": dragon._vuln, "hits": dragon.hits}
 	_apply_snapshot.rpc(snapshot)
 
 
@@ -189,6 +202,15 @@ func _enforce_kill_plane() -> void:
 		var p: Node3D = player_nodes[id]
 		if p.spectating:
 			continue
+		if _in_flood_arena(p.global_position):
+			# The flooded arena runs its own fall-in rule; the global plane (which
+			# the whole arena floor sits beneath) does not apply here.
+			if p.global_position.y < FLOOD_DEEP_OUT_Y:
+				if _flood_fight_live():
+					p.enter_spectator()
+				else:
+					p.respawn_at(FLOOD_ENTRANCE)
+			continue
 		if p.global_position.y < KILL_PLANE_Y:
 			if boss_live:
 				# Fall out of the arena mid-fight -> spectate, don't respawn.
@@ -224,6 +246,22 @@ func _enforce_moon_planes() -> void:
 				and absf(pos.z - MOON_ARRIVAL.z) < MOON_REGION_HALF:
 			p.global_position = MOON_REENTRY
 			p.velocity = Vector3.ZERO
+
+
+## Is this position inside the flooded raid arena's air space? (XZ footprint
+## plus the deep-underground Y band, so it never collides with the hub above.)
+func _in_flood_arena(pos: Vector3) -> bool:
+	return pos.y < FLOOD_ARENA_TOP_Y \
+		and absf(pos.x) < FLOOD_ARENA_HALF_X and absf(pos.z) < FLOOD_ARENA_HALF_Z
+
+
+## Is the water dragon currently a live threat? (Falling into a deep pool only
+## costs you the fight -- spectator -- while it is.)
+func _flood_fight_live() -> bool:
+	for d in get_tree().get_nodes_in_group("sync_dragon"):
+		if d.fight_live():
+			return true
+	return false
 
 
 ## A random town spawn marker's position (same set the game spawns players at).
