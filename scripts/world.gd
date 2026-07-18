@@ -291,17 +291,50 @@ func _remove_node(path: NodePath) -> void:
 ## --- Goblin Siege boss wave (server-only; wired to GameDirector) -----------
 
 func _on_director_state(new_state: int) -> void:
-	if not multiplayer.is_server() or GameDirector.mode != GameDirector.Mode.BOSS:
+	if not multiplayer.is_server():
 		return
-	match new_state:
-		GameDirector.COUNTDOWN:
-			_spawn_boss_wave()
-		GameDirector.PLAYING:
-			_set_enemies_frozen(false)
-			_mark_participants()
-		GameDirector.ROUND_END:
-			_despawn_boss_wave()
-			_end_boss_players()
+	match GameDirector.mode:
+		GameDirector.Mode.BOSS:
+			match new_state:
+				GameDirector.COUNTDOWN:
+					_spawn_boss_wave()
+				GameDirector.PLAYING:
+					_set_enemies_frozen(false)
+					_mark_participants()
+				GameDirector.ROUND_END:
+					_despawn_boss_wave()
+					_end_boss_players()
+		GameDirector.Mode.RAID:
+			match new_state:
+				GameDirector.PLAYING:
+					_rouse_dragon()
+					_mark_participants()
+				GameDirector.ROUND_END:
+					_reset_dragon()
+					_end_raid_players()
+
+
+## Rouse / stand down the water dragon on the raid's PLAYING / ROUND_END edges.
+func _rouse_dragon() -> void:
+	for d in get_tree().get_nodes_in_group("sync_dragon"):
+		d.begin_raid()
+
+
+func _reset_dragon() -> void:
+	for d in get_tree().get_nodes_in_group("sync_dragon"):
+		d.reset_to_dormant()
+
+
+## Raid over: restore anyone who fell in, setting them back on the entrance
+## ledge. Survivors are left where they are so they can collect the draconite
+## and climb out (the reward is a physical drop in the arena, unlike the
+## Goblin Siege which just returns everyone to the hub).
+func _end_raid_players() -> void:
+	for id in player_nodes:
+		var p: Node3D = player_nodes[id]
+		if p.spectating:
+			p.exit_spectator()
+			p.respawn_at(FLOOD_ENTRANCE)
 
 
 ## Spawn the enemy wave onto the arena disc, frozen until the countdown ends.
@@ -348,9 +381,11 @@ func _despawn_boss_wave() -> void:
 ## condition ("everyone's out") is measured against this set.
 func _mark_participants() -> void:
 	GameDirector.participants.clear()
+	var raid: bool = GameDirector.mode == GameDirector.Mode.RAID
 	for id in player_nodes:
 		var p: Node3D = player_nodes[id]
-		if _in_arena(p.global_position):
+		var here := _in_flood_arena(p.global_position) if raid else _in_arena(p.global_position)
+		if here:
 			GameDirector.participants.append(p.peer_id)
 
 

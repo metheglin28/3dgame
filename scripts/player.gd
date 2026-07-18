@@ -392,6 +392,9 @@ func _update_round_hud() -> void:
 	if GameDirector.mode == GameDirector.Mode.BOSS:
 		_update_boss_hud()
 		return
+	if GameDirector.mode == GameDirector.Mode.RAID:
+		_update_raid_hud()
+		return
 	match GameDirector.state:
 		GameDirector.HUB:
 			if GameDirector.session_wins.is_empty():
@@ -437,6 +440,28 @@ func _update_boss_hud() -> void:
 				round_label.text += "\nYou're out! Spectating %s  (click to switch)" % who
 		GameDirector.ROUND_END:
 			round_label.text = "Victory! The horde is broken." if GameDirector.boss_won else "Wiped out. The horde wins..."
+
+
+## The Water Dragon raid banner. Strikes-landed comes from the replicated dragon
+## (its `hits` rides the snapshot); 3 fells it (see dragon.gd HITS_TO_KILL).
+func _update_raid_hud() -> void:
+	match GameDirector.state:
+		GameDirector.HUB:
+			round_label.text = ""
+		GameDirector.COUNTDOWN:
+			round_label.text = "WATER DRAGON RAID\nthe deep stirs...  %d" % ceili(GameDirector.timer)
+		GameDirector.PLAYING:
+			var hits := 0
+			for d in get_tree().get_nodes_in_group("sync_dragon"):
+				hits = d.hits
+			round_label.text = "%s   Strikes: %d / 3" % [_clock(GameDirector.timer), hits]
+			if spectating:
+				var who := "—"
+				if _spec_target != null and is_instance_valid(_spec_target):
+					who = _spec_target.display_name
+				round_label.text += "\nYou're out! Spectating %s  (click to switch)" % who
+		GameDirector.ROUND_END:
+			round_label.text = "The dragon is slain! Grab the draconite." if GameDirector.boss_won else "The raid failed. The dragon prevails..."
 
 
 func _clock(t: float) -> String:

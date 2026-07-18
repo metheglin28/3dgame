@@ -125,6 +125,21 @@ func begin_raid() -> void:
 	_update_enrage()
 
 
+## Server-only. Stand the dragon back down after a raid ends, so the altar/stake
+## can start a fresh one. (Beaten or not -- a timed-out raid resets too.)
+func reset_to_dormant() -> void:
+	if not multiplayer.is_server():
+		return
+	armed = false
+	hits = 0
+	_want_surface = false
+	_struck = false
+	_state = State.DORMANT
+	_set_glow(false)
+	_set_enrage(false)
+	head_root.global_transform = _dormant_pose()
+
+
 func _physics_process(delta: float) -> void:
 	if _flash > 0.0:
 		_flash = maxf(0.0, _flash - delta)
@@ -392,6 +407,9 @@ func _drop_reward() -> void:
 	if not multiplayer.is_server():
 		return
 	for n in get_tree().get_nodes_in_group("draconite_reward"):
+		# Don't yank it out of a player's hands if a past raid already gave it out.
+		if n.get("carried_by") != -1:
+			continue
 		(n as Node3D).global_position = Vector3(_p0().x, -38.2, _p0().y - 5.0)
 
 

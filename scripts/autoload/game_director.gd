@@ -14,13 +14,15 @@ signal state_changed(new_state: int)
 
 enum { HUB, COUNTDOWN, PLAYING, ROUND_END }
 ## Which game the current round is. KotH is the hub control-point game; BOSS is
-## the co-op Goblin Siege in the dungeon arena (enemies spawned by the World on
-## the COUNTDOWN/PLAYING/ROUND_END transitions). The round state machine and
-## timer below are shared; `mode` just picks what PLAYING actually does and what
-## the HUD/marker show.
-enum Mode { KOTH, BOSS }
+## the co-op Goblin Siege in the dungeon arena; RAID is the co-op Water Dragon
+## fight in the flooded arena (the World arms/resets the dragon on the
+## COUNTDOWN/PLAYING/ROUND_END transitions). The round state machine and timer
+## below are shared; `mode` just picks what PLAYING actually does and what the
+## HUD/marker show.
+enum Mode { KOTH, BOSS, RAID }
 
-const ROUND_TIME := 150.0   # 2.5 minutes of play
+const ROUND_TIME := 150.0   # 2.5 minutes of play (KotH / Goblin Siege)
+const RAID_TIME := 300.0    # 5 minutes for the Water Dragon raid
 const COUNTDOWN_TIME := 3.0
 const RESULT_TIME := 6.0
 const HILL_RADIUS := 4.5
@@ -99,13 +101,29 @@ func start_boss_fight() -> void:
 	_set_state(COUNTDOWN)
 
 
+## Server-only. Called by the skull-on-a-stake on the flooded arena's entrance
+## ledge (see skull_stake.gd). Kicks off the co-op Water Dragon raid: the World
+## rouses the dormant dragon at PLAYING and resets it at ROUND_END. Same round
+## machinery as the Goblin Siege, just a 5-minute clock and a different win test.
+func start_dragon_raid() -> void:
+	if not multiplayer.is_server() or state != HUB:
+		return
+	mode = Mode.RAID
+	control_time.clear()
+	participants.clear()
+	boss_won = false
+	king_id = -1
+	timer = COUNTDOWN_TIME
+	_set_state(COUNTDOWN)
+
+
 ## Server-only, ticked every physics frame by the World.
 func tick(delta: float) -> void:
 	match state:
 		COUNTDOWN:
 			timer -= delta
 			if timer <= 0.0:
-				timer = ROUND_TIME
+				timer = RAID_TIME if mode == Mode.RAID else ROUND_TIME
 				hill_shift_timer = HILL_SHIFT_TIME
 				_set_state(PLAYING)
 		PLAYING:
@@ -120,10 +138,21 @@ func tick(delta: float) -> void:
 				timer -= delta
 				if timer <= 0.0:
 					_finish_round()
-			else:
-				# Boss: win when the whole horde is ringed out; lose if every
-				# participant is out, or if the clock runs out with enemies alive.
+			elif mode == Mode.BOSS:
+				# Goblin Siege: win when the whole horde is ringed out; lose if
+				# every participant is out, or the clock runs out with enemies alive.
 				if get_tree().get_nodes_in_group("arena_enemy").is_empty():
+					_finish_boss(true)
+				elif not participants.is_empty() and _alive_participants() == 0:
+					_finish_boss(false)
+				else:
+					timer -= delta
+					if timer <= 0.0:
+						_finish_boss(false)
+			else:
+				# Water Dragon raid: win when the dragon is slain; lose if every
+				# participant is out, or the 5-minute clock runs out first.
+				if _dragon_defeated():
 					_finish_boss(true)
 				elif not participants.is_empty() and _alive_participants() == 0:
 					_finish_boss(false)
@@ -176,6 +205,14 @@ func _finish_boss(won: bool) -> void:
 	last_winner = -1
 	timer = RESULT_TIME
 	_set_state(ROUND_END)
+
+
+## Has the water dragon been beaten? (Raid win condition.)
+func _dragon_defeated() -> bool:
+	for d in get_tree().get_nodes_in_group("sync_dragon"):
+		if d.is_defeated():
+			return true
+	return false
 
 
 ## How many of the arena's participants are still in the fight (not spectating).

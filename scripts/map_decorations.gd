@@ -29,7 +29,6 @@ const BUNNY_SCENE := preload("res://scenes/bunny.tscn")
 const BUNNY_MAN_SCENE := preload("res://scenes/bunny_man.tscn")
 const DRAGON_SCENE := preload("res://scenes/dragon.tscn")
 const DRACONITE_SCENE := preload("res://scenes/draconite.tscn")
-const DRAGON_ALTAR_SCENE := preload("res://scenes/dragon_altar.tscn")
 const GEM_DOOR_SCENE := preload("res://scenes/gem_door.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
@@ -1329,11 +1328,13 @@ func _build_flooded_arena() -> void:
 	dragon.apex_y = FLOOD_CEIL_Y - 6.0
 	add_child(dragon)
 
-	# The altar on the entrance ledge -- interacting rouses the dragon. Until
-	# then it lurks dormant in the top pool.
-	var altar := DRAGON_ALTAR_SCENE.instantiate()
-	altar.position = Vector3(FLOOD_PATH[0].x + 2.2, FLOOD_DRY_Y, FLOOD_PATH[0].y + 1.5)
-	add_child(altar)
+	# The skull-on-a-stake on the entrance ledge -- interacting starts the raid
+	# (same trigger style as the Goblin Siege; see skull_stake.gd). Until then the
+	# dragon lurks dormant in the top pool.
+	var stake := SKULL_STAKE_SCENE.instantiate()
+	stake.starts_dragon_raid = true
+	stake.position = Vector3(FLOOD_PATH[0].x + 2.2, FLOOD_DRY_Y, FLOOD_PATH[0].y + 1.5)
+	add_child(stake)
 
 	# The draconite reward, parked deep in the rock until the dragon is beaten
 	# (dragon._drop_reward lifts it to the floor by the top pool). It rides the

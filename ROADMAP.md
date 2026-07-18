@@ -200,9 +200,14 @@ audio and minimal feedback.*
       2 on dives; phase 3 ENRAGED -- red-eyed, waves on dives and emerges).
       Beaten, it sinks and yields the draconite jewel (parked in the rock, lifted
       to the floor by the top pool on defeat; a new holdable/throwable pickup).
-      Pending: Stage 5 (telegraph polish). Access from Level B — the descent
-      shaft + red-gem socket that actually lets players reach the arena — is the
-      remaining piece.
+      Access DONE: the Level B gem door (red gem) opens the descent to the arena.
+      Lifecycle DONE: a skull-on-a-stake on the entrance ledge starts the raid as
+      a proper GameDirector round (Mode.RAID) -- 3s countdown, a 5-MINUTE clock,
+      then win (dragon slain) / lose (clock out or everyone fell in). On ROUND_END
+      the World stands the dragon back down (re-fightable) and restores anyone who
+      fell in to the ledge; survivors stay to grab the draconite and climb out.
+      Pending: Stage 5 (telegraph polish), sound, a hit-pip HUD, and more attack
+      variety across the phases.
 
 - [ ] **Gem caverns (Level B)** — no longer sealed: a ramped corridor branches
       off a Level A room under the CANYON quadrant (the tower/dungeon pattern)
