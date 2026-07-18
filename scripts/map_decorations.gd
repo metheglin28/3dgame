@@ -1789,6 +1789,7 @@ func _build_tunnels() -> void:
 		_build_entrance(biome)
 	_build_levelb_entrance()
 	_build_levelc_entrance()
+	_build_levelb_water()
 
 
 func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array,
@@ -2017,6 +2018,64 @@ func _build_levelc_entrance() -> void:
 	_add_torch(Vector3(-22, -18.5, -35))
 	_add_torch(Vector3(-13, -24.5, -35))
 	_add_torch(Vector3(-3, -31.0, -35))
+
+
+## Small water accents through the gem caverns: a couple of gutters running
+## along wall bases and a few still puddles. Purely visual, non-colliding, and
+## deterministic like the rest of the map -- just a bit of trickling water to
+## give the flooded arena below a hint up here.
+const LEVELB_WATER_COL := Color(0.35, 0.6, 0.72, 0.55)
+
+func _build_levelb_water() -> void:
+	var y := LEVEL_B_Y + 0.02  # a hair above the cavern floor
+	# A gutter down the west wall (the col-0 rock face), starting up by the
+	# waterfall pocket -- reads as its runoff trickling north along the wall.
+	_add_water_accent(Vector3(-32.2, y, -16.0), Vector3(0.5, 0.04, 33.0))
+	# A gutter hugging the long rock wall on row 12, up in the north caverns.
+	_add_water_accent(Vector3(-20.0, y, 22.6), Vector3(20.0, 0.04, 0.5))
+	# A short one against a wall on the east side.
+	_add_water_accent(Vector3(20.2, y, 6.0), Vector3(0.5, 0.04, 12.0))
+	# A scatter of still puddles in open rooms and corridors (fixed sizes so the
+	# map stays byte-identical on every peer).
+	_add_water_puddle(Vector3(0, y, -30), 1.4)
+	_add_water_puddle(Vector3(10, y, -10), 1.1)
+	_add_water_puddle(Vector3(20, y, 0), 1.3)
+	_add_water_puddle(Vector3(-20, y, 20), 1.2)
+
+
+func _add_water_accent(center: Vector3, size: Vector3) -> void:
+	var mesh := MeshInstance3D.new()
+	mesh.position = center
+	var box := BoxMesh.new()
+	box.size = size
+	mesh.mesh = box
+	mesh.material_override = _water_accent_material()
+	add_child(mesh)
+
+
+func _add_water_puddle(center: Vector3, radius: float) -> void:
+	var mesh := MeshInstance3D.new()
+	mesh.position = center
+	var disc := CylinderMesh.new()
+	disc.top_radius = radius
+	disc.bottom_radius = radius
+	disc.height = 0.04
+	disc.radial_segments = 12
+	mesh.mesh = disc
+	mesh.material_override = _water_accent_material()
+	add_child(mesh)
+
+
+func _water_accent_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = LEVELB_WATER_COL
+	mat.roughness = 0.08
+	mat.metallic = 0.3
+	mat.emission_enabled = true          # a faint self-glow so it reads in the dark
+	mat.emission = Color(0.2, 0.45, 0.55)
+	mat.emission_energy_multiplier = 0.28
+	return mat
 
 
 ## Open-ended tube. `cull` picks which single side renders (CylinderMesh
