@@ -30,13 +30,16 @@ const KILL_PLANE_Y := -34.0
 
 # The flooded raid arena (Level C, see map_decorations._build_flooded_arena).
 # Its walkable floor sits at y=-40 -- well under the kill plane -- so the global
-# plane can't apply there. Instead, dropping below FLOOD_DEEP_OUT_Y means you've
-# fallen into one of the deep pools: the players' own failure state. During a
-# live dragon fight that means spectating; otherwise you're set back on the
-# entrance ledge.
-const FLOOD_ARENA_HALF_X := 17.5
-const FLOOD_ARENA_HALF_Z := 28.5
-const FLOOD_ARENA_TOP_Y := -16.0
+# plane can't apply anywhere in Level C. The exempt REGION is a box covering the
+# arena, its south-wall doorway/entrance ledge, AND the ramped descent that
+# drops in from the gem door (which runs south of the arena at z~-35, so a
+# tight arena-only box would let the kill plane catch you on the way down).
+# Inside it, dropping below FLOOD_DEEP_OUT_Y means you've fallen into a deep pool
+# -- the players' own failure state: spectate during a live fight, else you're
+# set back on the entrance ledge. (The descent floor at -39.5 stays safely above
+# that line, so walking down never counts as falling in.)
+const FLOOD_REGION_MIN := Vector3(-31.0, -55.0, -38.0)
+const FLOOD_REGION_MAX := Vector3(18.0, -16.0, 29.0)
 const FLOOD_DEEP_OUT_Y := -42.5
 const FLOOD_ENTRANCE := Vector3(0, -38.2, -27.0)
 
@@ -257,8 +260,9 @@ func _enforce_moon_planes() -> void:
 ## Is this position inside the flooded raid arena's air space? (XZ footprint
 ## plus the deep-underground Y band, so it never collides with the hub above.)
 func _in_flood_arena(pos: Vector3) -> bool:
-	return pos.y < FLOOD_ARENA_TOP_Y \
-		and absf(pos.x) < FLOOD_ARENA_HALF_X and absf(pos.z) < FLOOD_ARENA_HALF_Z
+	return pos.x > FLOOD_REGION_MIN.x and pos.x < FLOOD_REGION_MAX.x \
+		and pos.y > FLOOD_REGION_MIN.y and pos.y < FLOOD_REGION_MAX.y \
+		and pos.z > FLOOD_REGION_MIN.z and pos.z < FLOOD_REGION_MAX.z
 
 
 ## Is the water dragon currently a live threat? (Falling into a deep pool only
