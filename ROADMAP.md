@@ -209,8 +209,17 @@ audio and minimal feedback.*
       and descends ~9m into a gem-cavern room, mouth marked "TO THE GEM CAVERNS".
       Placed east of the canyon's surface entrance so they don't overlap; the
       descent is a plain enclosed ramp for now. Still needs a purpose of its own
-      (a mode arena? a coop objective?). Next gateway to build: Level B → Level C
-      (the flooded raid), the entrance the red gem unlocks.
+      (a mode arena? a coop objective?).
+
+- [ ] **Level C access (the gem door)** — DONE (geometry + mechanic). A
+      naturally-walled gem-cavern pocket, hidden behind a WATERFALL, holds a
+      stone DOOR with a gem-shaped indent. Carry the red gem (from the goblin
+      cave) here and interact to seat it: the gem locks into the socket, the
+      slab grinds down, and a ramped descent opens -- running east while
+      dropping ~25m, then through a doorway in the arena's south wall onto the
+      entrance ledge, right by the dragon altar. Door state is server-authoritative
+      and rides the World snapshot (late-join safe). The raid is now reachable
+      end to end: gem caverns → waterfall → gem door → descent → arena → altar.
 - [ ] **Stone tower interior** — empty; candidate Sumo arena or KotH spot.
 - [x] **Troll** — DONE; landed as the Goblin Siege boss (Phase 4).
 - [ ] **Powers** — currently mutually exclusive novelties; decide their role in

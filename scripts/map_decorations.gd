@@ -30,6 +30,7 @@ const BUNNY_MAN_SCENE := preload("res://scenes/bunny_man.tscn")
 const DRAGON_SCENE := preload("res://scenes/dragon.tscn")
 const DRACONITE_SCENE := preload("res://scenes/draconite.tscn")
 const DRAGON_ALTAR_SCENE := preload("res://scenes/dragon_altar.tscn")
+const GEM_DOOR_SCENE := preload("res://scenes/gem_door.tscn")
 const SIGN_LABEL_SCRIPT := preload("res://scripts/faded_label.gd")
 
 const MAP_HALF := 60.0
@@ -291,6 +292,20 @@ const LEVELB_ENTRY_A := Vector3(30, LEVEL_A_Y, -32.5)   # mouth, at a Level A ro
 const LEVELB_ENTRY_B := Vector3(30, LEVEL_B_Y, -15.0)   # lands in a Level B room (cell 13,4)
 const LEVELB_ENTRY_FLOOR_HOLES: Array[Vector2] = [Vector2(30, -30), Vector2(30, -26)]
 const LEVELB_ENTRY_CEIL_HOLES: Array[Rect2] = [Rect2(Vector2(27.6, -22.4), Vector2(4.8, 9.8))]
+
+## Level B -> Level C entrance: the dead-end gem-cavern pocket at cell (1,0) --
+## naturally walled by rock on three sides, open only north -- becomes a hidden
+## ALCOVE by hanging a WATERFALL across its mouth. At its east side a stone DOOR
+## with a gem-shaped indent seals a ramped descent; seat the red gem and the door
+## grinds down, opening the way. The descent runs EAST at z=-35 (just south of
+## the arena) while dropping ~25m, then turns north through a doorway punched in
+## the arena's south wall, arriving on the entrance ledge. Cell (2,0) -- the
+## pocket's east rock -- is skipped so the door/descent can take its place.
+const LEVELC_ALCOVE := Vector3(-30.0, LEVEL_B_Y, -35.0)  # the pocket (cell 1,0) center
+const LEVELC_DOOR := Vector3(-27.5, LEVEL_B_Y, -35.0)    # door at the pocket's east mouth
+const LEVELC_WATER_Z := -32.5                            # waterfall plane (pocket mouth)
+const LEVELC_GATE_CELL := Vector2i(2, 0)                 # Level B rock cell the descent pierces
+const LEVELC_FLOOR_HOLES: Array[Vector2] = [Vector2(-26, -35), Vector2(-23, -35)]
 
 
 func _ready() -> void:
@@ -1255,7 +1270,17 @@ func _build_flooded_arena() -> void:
 	var wall_h := wall_top - wall_bot
 	var wall_cy := (wall_top + wall_bot) * 0.5
 	var wt := 1.5
-	_add_box(Vector3(c.x, wall_cy, minz - wt * 0.5), Vector3(FLOOD_HALF_X * 2.0 + wt * 2.0, wall_h, wt), FLOOD_ROCK)
+	# South wall, split around the Level C entrance doorway (x +/-2.5, y up to
+	# -35.5) where the descent from the gem caverns breaks in onto the ledge.
+	var sz := minz - wt * 0.5
+	var full_w := FLOOD_HALF_X * 2.0 + wt * 2.0
+	var door_hw := 2.5
+	var door_top := -35.5
+	var side_w := (full_w * 0.5) - door_hw
+	_add_box(Vector3(c.x - door_hw - side_w * 0.5, wall_cy, sz), Vector3(side_w, wall_h, wt), FLOOD_ROCK)  # west of doorway
+	_add_box(Vector3(c.x + door_hw + side_w * 0.5, wall_cy, sz), Vector3(side_w, wall_h, wt), FLOOD_ROCK)  # east of doorway
+	_add_box(Vector3(c.x, (door_top + wall_top) * 0.5, sz), Vector3(door_hw * 2.0, wall_top - door_top, wt), FLOOD_ROCK)  # header
+	_add_box(Vector3(c.x, (wall_bot + FLOOD_DRY_Y) * 0.5, sz), Vector3(door_hw * 2.0, FLOOD_DRY_Y - wall_bot, wt), FLOOD_ROCK)  # sill below the ledge
 	_add_box(Vector3(c.x, wall_cy, c.y + FLOOD_HALF_Z + wt * 0.5), Vector3(FLOOD_HALF_X * 2.0 + wt * 2.0, wall_h, wt), FLOOD_ROCK)
 	_add_box(Vector3(minx - wt * 0.5, wall_cy, c.y), Vector3(wt, wall_h, FLOOD_HALF_Z * 2.0), FLOOD_ROCK)
 	_add_box(Vector3(c.x + FLOOD_HALF_X + wt * 0.5, wall_cy, c.y), Vector3(wt, wall_h, FLOOD_HALF_Z * 2.0), FLOOD_ROCK)
@@ -1755,13 +1780,15 @@ func _build_tunnels() -> void:
 	a_floor_holes.append_array(LEVELB_ENTRY_FLOOR_HOLES)
 	_build_tunnel_level(LEVEL_A_ROWS, LEVEL_A_ORIGIN, LEVEL_A_Y, a_floor_holes,
 		TUNNEL_ROCK, TUNNEL_FLOOR_COLOR, TUNNEL_CEILING_COLOR, false, [TOWER_GATE_CELL, DUNGEON_GATE_CELL], ceil_holes)
-	# Level B's ceiling is cut where the descent breaks into a gem-cavern room.
-	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, [],
-		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true, [], LEVELB_ENTRY_CEIL_HOLES)
+	# Level B's ceiling is cut where the Level A descent breaks in; its floor is
+	# cut where the Level C descent drops away toward the flooded arena.
+	_build_tunnel_level(LEVEL_B_ROWS, LEVEL_B_ORIGIN, LEVEL_B_Y, LEVELC_FLOOR_HOLES,
+		DEEP_ROCK, DEEP_FLOOR_COLOR, DEEP_CEILING_COLOR, true, [LEVELC_GATE_CELL], LEVELB_ENTRY_CEIL_HOLES)
 
 	for biome in ENTRANCE_SHAFTS:
 		_build_entrance(biome)
 	_build_levelb_entrance()
+	_build_levelc_entrance()
 
 
 func _build_tunnel_level(rows: Array[String], origin: Vector2, y: float, floor_holes: Array,
@@ -1940,6 +1967,56 @@ func _build_levelb_entrance() -> void:
 	_add_torch(Vector3(30, -8.5, -28.0))
 	_add_torch(Vector3(30, -11.5, -22.0))
 	_add_torch(Vector3(30, -13.5, -16.5))
+
+
+## The Level B -> Level C entrance: a waterfall-hidden alcove with a gem-socket
+## door, and the ramped descent it seals. See the LEVELC_* constants for the
+## layout; the alcove is the naturally-walled pocket cell (1,0), its east rock
+## (LEVELC_GATE_CELL) skipped for the door + descent, and the arena's south wall
+## already carries the doorway this arrives at (see _build_flooded_arena).
+func _build_levelc_entrance() -> void:
+	var floor_y := LEVEL_B_Y
+	var ceil_y := LEVEL_B_Y + TUNNEL_WALL_HEIGHT
+	# The pocket already has rock walls on west/south and a floor + ceiling from
+	# the Level B build; we plug the gap left by the skipped east cell ABOVE the
+	# descent's roof (so the door has a frame and the ceiling stays sealed).
+	var gx := LEVEL_B_ORIGIN.x + LEVELC_GATE_CELL.x * TUNNEL_CELL   # -27.5
+	var gz := LEVEL_B_ORIGIN.y + LEVELC_GATE_CELL.y * TUNNEL_CELL   # -37.5
+	_add_box(Vector3(gx + 2.5, floor_y + 3.35, gz + 2.5), Vector3(TUNNEL_CELL, TUNNEL_WALL_HEIGHT - 3.3, TUNNEL_CELL), DEEP_ROCK)  # header over the door
+	_add_box(Vector3(gx + 2.5, floor_y + 1.9, gz + 0.7), Vector3(TUNNEL_CELL, 3.8, 1.4), DEEP_ROCK)   # south jamb strip
+	_add_box(Vector3(gx + 2.5, floor_y + 1.9, gz + 4.3), Vector3(TUNNEL_CELL, 3.8, 1.4), DEEP_ROCK)   # north jamb strip
+
+	# The waterfall across the pocket's north mouth + a splash pool at its foot.
+	var wf := MeshInstance3D.new()
+	wf.position = Vector3(-30.0, floor_y + 2.0, LEVELC_WATER_Z)
+	var wm := BoxMesh.new()
+	wm.size = Vector3(4.6, 4.0, 0.18)
+	wf.mesh = wm
+	var wmat := StandardMaterial3D.new()
+	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wmat.albedo_color = Color(0.55, 0.78, 0.95, 0.55)
+	wmat.roughness = 0.1
+	wmat.metallic = 0.2
+	wf.material_override = wmat
+	add_child(wf)
+	_add_cylinder(Vector3(-30.0, floor_y + 0.05, LEVELC_WATER_Z), 2.4, 2.4, 0.1, Color(0.55, 0.78, 0.95, 0.6), false)
+	_add_torch(Vector3(-31.5, floor_y + 2.2, -36.5))
+
+	# The gem door at the pocket's east mouth.
+	var door := GEM_DOOR_SCENE.instantiate()
+	door.position = LEVELC_DOOR
+	add_child(door)
+
+	# The descent: east while dropping to the arena floor level, then north to the
+	# doorway punched in the arena's south wall (onto the entrance ledge).
+	_add_corridor([
+		Vector3(-27.5, floor_y + 0.02, -35.0),   # at the door (opens -x into the alcove)
+		Vector3(0.0, FLOOD_DRY_Y + 0.02, -35.0),  # east, dropping ~24.5m
+		Vector3(0.0, FLOOD_DRY_Y + 0.02, -29.5),  # north to the arena's south doorway
+	], 2.4, 3.8)
+	_add_torch(Vector3(-22, -18.5, -35))
+	_add_torch(Vector3(-13, -24.5, -35))
+	_add_torch(Vector3(-3, -31.0, -35))
 
 
 ## Open-ended tube. `cull` picks which single side renders (CylinderMesh
