@@ -1064,8 +1064,22 @@ func _smooth_to_net_state(delta: float) -> void:
 
 ## Where this player is looking, pitch included -- the aim pivot carries the
 ## camera's yaw+pitch but none of the mesh's facing. Used for throw direction.
+## The aim direction for everything that shoots or throws (revolver, snowball,
+## wizard bolt, thrown items, sword). The third-person camera rides over the
+## right shoulder (see CAM_SHOULDER / the SpringArm offset in player.tscn), so
+## "straight out of the muzzle" would NOT match where the screen-center crosshair
+## points. Instead we CONVERGE: aim from the muzzle at the point the crosshair is
+## looking at, a fixed distance down the camera's centre ray. Computed purely
+## from the synced yaw/pitch + fixed offsets, so the server reproduces it exactly.
+const AIM_CONVERGE_DIST := 35.0
+const CAM_SHOULDER := Vector3(0.9, 0.15, 0.0)  # right + a touch up, in yaw space
+
 func look_direction() -> Vector3:
-	return -aim_pivot.global_transform.basis.z
+	var yaw_basis := Basis(Vector3.UP, camera_yaw)
+	var cam_origin := camera_pivot.global_position + yaw_basis * CAM_SHOULDER
+	var view_dir := -aim_pivot.global_transform.basis.z
+	var target := cam_origin + view_dir * AIM_CONVERGE_DIST
+	return (target - hold_point.global_position).normalized()
 
 
 func _update_squash_stretch(delta: float) -> void:

@@ -1,5 +1,5 @@
 extends RigidBody3D
-## A revolver bullet: small, very fast, flies nearly flat, and RAGDOLLS
+## A revolver bullet: small, very fast, flies DEAD flat (no gravity), and RAGDOLLS
 ## whatever character it hits with the revolver's high knockback (harder than
 ## the sword). Same networking as the snowball -- server simulates, everyone
 ## renders from the projectile snapshot -- plus server-side contact detection:
