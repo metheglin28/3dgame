@@ -426,29 +426,44 @@ func _fire_damage() -> void:
 			p.apply_knockback(to.normalized(), FIRE_KB, FIRE_ROLL)  # blown back along the flame
 
 
+## A FLAT, ground-hugging fan of fire: a wide triangle lying on the surface,
+## pointed (thinnest) at the mouth and fanning out (widest) at FIRE_RANGE. Built
+## as a triangle fan in the local XZ plane, apex at the mouth's ground point, and
+## look_at'd along the fire direction (which keeps it flat, since the aim is
+## horizontal). Matches the damage cone (same apex, half-angle, range).
 @rpc("authority", "call_local", "reliable")
 func _play_fire(origin: Vector3, dir: Vector3, secs: float) -> void:
+	var d := Vector3(dir.x, 0.0, dir.z)
+	if d.length() < 0.1:
+		d = Vector3.FORWARD
+	d = d.normalized()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segs := 14
+	for i in range(segs):
+		var a0 := lerpf(-FIRE_HALF_ANGLE, FIRE_HALF_ANGLE, float(i) / segs)
+		var a1 := lerpf(-FIRE_HALF_ANGLE, FIRE_HALF_ANGLE, float(i + 1) / segs)
+		var p0 := Vector3(sin(a0) * FIRE_RANGE, 0.0, -cos(a0) * FIRE_RANGE)
+		var p1 := Vector3(sin(a1) * FIRE_RANGE, 0.0, -cos(a1) * FIRE_RANGE)
+		for v in [Vector3.ZERO, p1, p0]:  # apex + far arc, one wedge per segment
+			st.set_normal(Vector3.UP)
+			st.add_vertex(v)
 	var flame := MeshInstance3D.new()
-	var cone := CylinderMesh.new()
-	cone.top_radius = FIRE_RANGE * tan(FIRE_HALF_ANGLE)  # wide mouth at the far end
-	cone.bottom_radius = 0.25                            # narrow at the muzzle
-	cone.height = FIRE_RANGE
-	cone.radial_segments = 10
-	flame.mesh = cone
+	flame.mesh = st.commit()
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.45, 0.1, 0.55)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(1.0, 0.45, 0.1, 0.6)
 	mat.emission_enabled = true
 	mat.emission = Color(1.0, 0.55, 0.15)
 	mat.emission_energy_multiplier = 2.0
 	flame.material_override = mat
 	add_child(flame)
-	# The cylinder's axis is local +Y; point it down the fire direction, muzzle at origin.
-	flame.global_position = origin + dir * (FIRE_RANGE * 0.5)
-	flame.look_at_from_position(flame.global_position, flame.global_position + dir, Vector3.UP)
-	flame.rotate_object_local(Vector3(1, 0, 0), PI * 0.5)
-	flame.scale = Vector3(0.2, 1, 0.2)
+	# Apex at the mouth's ground point; lie flat just over the surface.
+	flame.global_position = Vector3(origin.x, water_y + 0.25, origin.z)
+	flame.look_at(flame.global_position + d, Vector3.UP)  # local -Z -> fire dir, stays flat
+	flame.scale = Vector3(0.3, 1.0, 0.3)
 	var tween := create_tween()
 	tween.tween_property(flame, "scale", Vector3(1, 1, 1), 0.15)
 	tween.tween_interval(maxf(0.05, secs - 0.35))
