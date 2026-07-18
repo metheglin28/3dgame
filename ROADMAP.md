@@ -206,8 +206,14 @@ audio and minimal feedback.*
       then win (dragon slain) / lose (clock out or everyone fell in). On ROUND_END
       the World stands the dragon back down (re-fightable) and restores anyone who
       fell in to the ledge; survivors stay to grab the draconite and climb out.
-      Pending: Stage 5 (telegraph polish), sound, a hit-pip HUD, and more attack
-      variety across the phases.
+      Attacks reworked: he now travels hole-to-hole in alternating LOW arcs (over
+      water) and hidden SWIMS (submerged), so he always exits a DIFFERENT hole
+      than he entered; the body is much longer and skims low, and brushing it
+      knocks you down (ragdoll) while the head flat-out launches you (pistol).
+      Phase 2 adds FIRE BREATH -- he pops his head from a hole and torches the
+      nearest player (lightning knockback + long roll); phase 3 (enraged) does
+      all of it faster and far more often. The crown-stomp is still how you hurt
+      him (3 hits), unchanged. Pending: telegraph polish, sound, a hit-pip HUD.
 
 - [ ] **Gem caverns (Level B)** — no longer sealed: a ramped corridor branches
       off a Level A room under the CANYON quadrant (the tower/dungeon pattern)

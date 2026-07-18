@@ -1,26 +1,31 @@
 extends Node3D
 ## The water dragon -- a serpent modelled after Ryujin and Glaurung.
 ##
-## MOTION: it ARCS between the flooded arena's deep pools -- erupting from one,
-## sailing over the water, and plunging into the next (the underwater crawlspace
-## between pools is lore; the head just dips below the dim surface at each arc
-## end and re-emerges at the next).
+## MOTION: it travels the pools in alternating legs -- a low ARC over the water
+## (erupt from one hole, skim across, dive into another) then a hidden SWIM
+## (submerged, from the hole it just entered to a DIFFERENT one). So it always
+## exits a different hole than it entered, and the long body sweeps low enough to
+## catch players: brushing the body knocks you down, the head flat-out launches
+## you (see _body_contact).
 ##
-## COMBAT: dormant until the altar rouses it (begin_raid). Then it roams, and
-## after a spell surfaces at the TOP pool, rears up (the telegraph) and flops its
-## head onto the floor -- EXPOSED, crown weak point glowing. Stomp the crown to
-## land a hit; three hits fell it. Each hit escalates the PHASE (1->3): it moves
-## faster, the exposed window shrinks, and its dives throw SPLASH WAVES that
-## knock players around the pools (phase 2 on dives; phase 3 ENRAGED -- red-eyed,
-## waves on dives and emerges). Falling into a deep pool is the players' own lose
-## (world.gd). Beaten, it sinks and yields the draconite jewel.
+## COMBAT: dormant until the stake rouses it (begin_raid). It roams, and after a
+## spell surfaces at the TOP pool, rears up (the telegraph) and flops its head
+## onto the floor -- EXPOSED, crown weak point glowing. Stomp the crown to land a
+## hit; three hits fell it. Each hit escalates the PHASE (1->3):
+##   phase 1 -- low hole-to-hole hopping (the body is the hazard);
+##   phase 2 -- same, but it periodically pops its head from a hole and BREATHES
+##              FIRE at the nearest player before resuming;
+##   phase 3 -- ENRAGED (red-eyed): everything faster -- quicker hops and much
+##              more frequent fire.
+## Falling into a deep pool is the players' own lose (world.gd). Beaten, it sinks
+## and yields the draconite jewel.
 ##
 ## Server-authoritative: only the server runs the state machine; the head pose,
 ## the vulnerable flag, the hit count and the enrage flag ride the World's
-## per-frame snapshot, splash rings replicate by RPC, and every peer trails the
-## body + mirrors the glow locally.
+## per-frame snapshot, the fire plume replicates by RPC, and every peer trails
+## the body + mirrors the glow locally.
 
-enum State { ROAM, RISING, EXPOSED, RECOIL, DEFEATED, DEAD, DORMANT }
+enum State { ROAM, RISING, EXPOSED, RECOIL, DEFEATED, DEAD, DORMANT, BREATHING }
 
 # Configured by map_decorations before the node enters the tree.
 var pools: Array = []          # Array[Vector2], world XZ of each deep pool
@@ -28,15 +33,29 @@ var water_y := -39.65          # the waterline (arc ends dip just below this)
 var deep_y := -49.0            # how deep the head sinks at each arc end
 var apex_y := -24.0            # arc peak height
 
-const TOUR: Array[int] = [0, 3, 1, 2]  # pool visiting order -- long criss-cross arcs
-const HOP_MIN_DUR := 1.4
+# Roam legs (see _leg_pose). A leg is an ARC (over water) or a SWIM (submerged).
+const HOP_MIN_DUR := 1.0
+const ARC_APEX_OVER := 2.5   # how high the low hop hump peaks above the waterline
+const SWIM_BOB := 2.0        # how far the submerged swim rises (stays below water)
 
 # Per-phase escalation (index = phase-1).
 const ROAM_BY_PHASE: Array[float] = [9.0, 7.0, 5.0]
 const EXPOSE_BY_PHASE: Array[float] = [4.5, 3.8, 3.0]
-const HOPSPEED_BY_PHASE: Array[float] = [9.0, 11.0, 13.5]
-const SPLASH_R_BY_PHASE: Array[float] = [0.0, 6.0, 8.0]     # 0 = no wave in phase 1
-const SPLASH_KB_BY_PHASE: Array[float] = [0.0, 12.0, 15.0]
+const HOPSPEED_BY_PHASE: Array[float] = [16.0, 20.0, 26.0]  # m/s the head travels a leg
+
+# Body-contact hazard (roam only -- NOT during the exposed hit window).
+const HEAD_HIT_R := 2.0
+const BODY_HIT_R := 1.7
+const HEAD_LAUNCH := 16.0    # a brush from the head: pistol-equivalent launch
+const BODY_KB := 11.0        # a brush from the body: knockback + ragdoll
+
+# Fire breath (phase >= 2). It pops from a hole, breathes at the nearest player.
+const FIRE_INTERVAL_BY_PHASE: Array[float] = [999.0, 7.0, 3.5]
+const BREATHE_DUR_BY_PHASE: Array[float] = [2.4, 2.4, 1.7]  # whole pop-breathe-dive
+const FIRE_KB := 13.0        # lightning-equivalent: moderate knockback...
+const FIRE_ROLL := 3.2       # ...but a long roll
+const FIRE_RANGE := 15.0
+const FIRE_HALF_ANGLE := 0.42  # ~24 degrees to each side of the aim
 
 const RISE_DUR := 2.3
 const RECOIL_DUR := 1.5
@@ -45,7 +64,7 @@ const HITS_TO_KILL := 3
 const STRIKE_R := 2.6
 const STRIKE_BOUNCE := 13.0
 
-const SEG_COUNT := 18
+const SEG_COUNT := 32        # much longer than before -- more body to bump into
 const SEG_GAP := 1.05
 const HEAD_R := 1.35
 
@@ -70,11 +89,16 @@ var _segments: Array[Node3D] = []
 var _hist: PackedVector3Array = PackedVector3Array()
 
 var _state: int = State.DORMANT
-var _hop_i := 0
-var _t := 0.0
-var _hop_dur := 2.0
+var _cur_hole := 0             # pool the head is leaving
+var _next_hole := 1           # pool the head is heading to
+var _leg_arc := true          # this leg: true = arc over water, false = submerged swim
+var _leg_t := 0.0             # 0..1 through the current leg
+var _leg_dur := 1.5
 var _roam_timer := 0.0
 var _want_surface := false
+var _fire_timer := 0.0
+var _fire_dir := Vector3.FORWARD  # locked aim of the current fire breath
+var _fire_shown := false
 var _phase_t := 0.0
 var _expose_timer := 0.0
 var _struck := false
@@ -82,18 +106,17 @@ var _vuln := false
 var _enraged := false
 var _flash := 0.0
 var _bob := 0.0
-var _prev_head_y := 0.0
+var _rng := RandomNumberGenerator.new()
 var _started := false
 
 
 func _ready() -> void:
 	add_to_group("sync_dragon")
+	_rng.seed = 0xD2A6
 	_build_head()
 	_build_body()
-	_recompute_hop_dur()
 	var start := _dormant_pose()
 	head_root.global_transform = start
-	_prev_head_y = start.origin.y
 	var back := -start.basis.z
 	for i in range(SEG_COUNT * 4):
 		_hist.append(start.origin - back * (i * 0.4))
@@ -118,11 +141,21 @@ func begin_raid() -> void:
 	armed = true
 	hits = 0
 	_state = State.ROAM
-	_hop_i = 0
-	_t = 0.0
-	_roam_timer = _roam_time()
-	_recompute_hop_dur()
+	_start_roam()
 	_update_enrage()
+
+
+## Set up a fresh roam: the head is at the top pool (where it lurked), so start
+## an arc out of it toward a random other pool, and arm the surface/fire timers.
+func _start_roam() -> void:
+	_cur_hole = 0
+	_next_hole = _pick_hole(0)
+	_leg_arc = true
+	_leg_t = 0.0
+	_leg_dur = _compute_leg_dur()
+	_roam_timer = _roam_time()
+	_fire_timer = _fire_interval()
+	_want_surface = false
 
 
 ## Server-only. Stand the dragon back down after a raid ends, so the altar/stake
@@ -152,6 +185,8 @@ func _physics_process(delta: float) -> void:
 			head_root.global_transform = _dormant_pose()
 		State.ROAM:
 			_tick_roam(delta)
+		State.BREATHING:
+			_tick_breathing(delta)
 		State.RISING:
 			_tick_rising(delta)
 		State.EXPOSED:
@@ -201,21 +236,224 @@ func _update_enrage() -> void:
 # --- state ticks --------------------------------------------------------------
 
 func _tick_roam(delta: float) -> void:
-	if armed:
-		_roam_timer -= delta
-		if _roam_timer <= 0.0:
-			_want_surface = true
-	_advance_roam(delta)
-	if _want_surface and head_root.global_position.y < water_y - 0.5 \
-			and Vector2(head_root.global_position.x, head_root.global_position.z).distance_to(_p0()) < 6.0:
-		_want_surface = false
-		_state = State.RISING
-		_phase_t = 0.0
-		head_root.global_transform = _look_transform(_deep_pt(), _deep_pt() + Vector3(0, 1, 0))
-		return
-	var tf := _head_pose_roam()
-	head_root.global_transform = tf
-	_maybe_splash(tf.origin)
+	_roam_timer -= delta
+	if _roam_timer <= 0.0:
+		_want_surface = true
+	if phase() >= 2 and not _want_surface:
+		_fire_timer -= delta
+	# Advance the leg; act on leg boundaries (head sitting in a hole).
+	_leg_t += delta / _leg_dur
+	if _leg_t >= 1.0:
+		_leg_t = 0.0
+		_cur_hole = _next_hole
+		_leg_arc = not _leg_arc
+		# At the top pool with the surface cue up -> rise to be struck.
+		if _want_surface and _cur_hole == 0:
+			_want_surface = false
+			_state = State.RISING
+			_phase_t = 0.0
+			head_root.global_transform = _look_transform(_deep_pt(), _deep_pt() + Vector3(0, 1, 0))
+			return
+		# Otherwise, maybe pop up and breathe fire (phase 2+); else pick the next hole.
+		if not _want_surface and _fire_timer <= 0.0 and phase() >= 2 and _nearest_player() != null:
+			_enter_breathing()
+			return
+		_next_hole = 0 if _want_surface else _pick_hole(_cur_hole)
+		_leg_dur = _compute_leg_dur()
+	head_root.global_transform = _leg_pose()
+	_body_contact()
+
+
+func _pick_hole(cur: int) -> int:
+	var n := pools.size()
+	if n <= 1:
+		return cur
+	var h := cur
+	while h == cur:
+		h = _rng.randi() % n
+	return h
+
+
+func _compute_leg_dur() -> float:
+	var d: float = pools[_cur_hole].distance_to(pools[_next_hole])
+	var speed: float = HOPSPEED_BY_PHASE[phase() - 1]
+	if _leg_arc:
+		return maxf(HOP_MIN_DUR, d / speed)
+	return maxf(0.6, d / (speed * 1.5))  # the submerged transit is a touch quicker
+
+
+## The head this instant along the current leg. ARC legs hump LOW over the water
+## (emerge -> skim -> dive); SWIM legs stay submerged, so the head vanishes at one
+## hole and reappears at another.
+func _leg_pose() -> Transform3D:
+	var a: Vector2 = pools[_cur_hole]
+	var b: Vector2 = pools[_next_hole]
+	var e := smoothstep(0.0, 1.0, _leg_t)
+	var xz := a.lerp(b, e)
+	var y := _leg_y(_leg_t)
+	var pos := Vector3(xz.x, y, xz.y)
+	var t2 := minf(_leg_t + 0.04, 1.0)
+	var xz2 := a.lerp(b, smoothstep(0.0, 1.0, t2))
+	var ahead := Vector3(xz2.x, _leg_y(t2), xz2.y)
+	return _look_transform(pos, ahead)
+
+
+func _leg_y(t: float) -> float:
+	if _leg_arc:
+		# Deep at both ends, a low hump (apex just over the waterline) in the middle.
+		return lerpf(deep_y, water_y + ARC_APEX_OVER, sin(PI * t))
+	# Submerged the whole way: bob up a little but stay under the surface.
+	return minf(water_y - 1.5, deep_y + sin(PI * t) * SWIM_BOB)
+
+
+# --- body-contact hazard ------------------------------------------------------
+
+## Server-only, roam-only. Anyone the above-water head or body brushes gets hit:
+## the head flat-out launches you (pistol), the body knocks you down (ragdoll).
+## apply_knockback's own immunity window keeps it a bump, not a stunlock. Skipped
+## during the exposed hit window, where you're meant to walk up and strike.
+func _body_contact() -> void:
+	var players := get_tree().get_nodes_in_group("players")
+	var hp := head_root.global_position
+	var head_live := hp.y > water_y - 1.2
+	for pl in players:
+		var p := pl as Node3D
+		if p == null or p.get("spectating") or not p.has_method("apply_knockback"):
+			continue
+		var pp: Vector3 = p.global_position
+		if head_live and _touching(pp, hp, HEAD_HIT_R):
+			_shove_from(p, pp, hp, HEAD_LAUNCH, RAGDOLL_MIN)
+			continue
+		for seg in _segments:
+			var sp: Vector3 = seg.global_position
+			if sp.y > water_y - 1.2 and _touching(pp, sp, BODY_HIT_R):
+				_shove_from(p, pp, sp, BODY_KB, RAGDOLL_MIN)
+				break
+
+
+const RAGDOLL_MIN := 1.1
+
+func _touching(pp: Vector3, cp: Vector3, r: float) -> bool:
+	return Vector2(pp.x - cp.x, pp.z - cp.z).length() < r and absf(pp.y - cp.y) < r + 1.2
+
+
+func _shove_from(p: Node3D, pp: Vector3, cp: Vector3, power: float, ragtime: float) -> void:
+	var dir := Vector3(pp.x - cp.x, 0.0, pp.z - cp.z)
+	if dir.length() < 0.1:
+		dir = Vector3(cos(_bob * 2.0), 0, sin(_bob * 2.0))
+	p.apply_knockback(dir.normalized(), power, ragtime)
+
+
+func _nearest_player() -> Node3D:
+	var best: Node3D = null
+	var bd := INF
+	var hp := head_root.global_position
+	for pl in get_tree().get_nodes_in_group("players"):
+		var p := pl as Node3D
+		if p == null or p.get("spectating"):
+			continue
+		var d: float = Vector2(p.global_position.x - hp.x, p.global_position.z - hp.z).length()
+		if d < bd:
+			bd = d
+			best = p
+	return best
+
+
+# --- fire breath (phase 2+) ---------------------------------------------------
+
+func _fire_interval() -> float:
+	return FIRE_INTERVAL_BY_PHASE[phase() - 1]
+
+
+func _enter_breathing() -> void:
+	_state = State.BREATHING
+	_phase_t = 0.0
+	_fire_shown = false
+	var target := _nearest_player()
+	var hole: Vector2 = pools[_cur_hole]
+	if target != null:
+		_fire_dir = Vector3(target.global_position.x - hole.x, 0.0, target.global_position.z - hole.y)
+	if _fire_dir.length() < 0.1:
+		_fire_dir = Vector3.FORWARD
+	_fire_dir = _fire_dir.normalized()
+
+
+## Pop the head from the current hole, breathe a fire cone at the locked aim for
+## the middle of the window, then dive back and resume roaming.
+func _tick_breathing(delta: float) -> void:
+	_phase_t += delta / BREATHE_DUR_BY_PHASE[phase() - 1]
+	var t := clampf(_phase_t, 0.0, 1.0)
+	var hole: Vector2 = pools[_cur_hole]
+	var deep := Vector3(hole.x, deep_y, hole.y)
+	var up := Vector3(hole.x, water_y + 1.5, hole.y)
+	var aim := Vector3(_fire_dir.x, -0.1, _fire_dir.z)
+	if t < 0.22:
+		head_root.global_transform = _look_transform(deep.lerp(up, smoothstep(0.0, 1.0, t / 0.22)), up + aim)
+	elif t < 0.82:
+		head_root.global_transform = _look_transform(up, up + aim)
+		if not _fire_shown:
+			_fire_shown = true
+			var secs := BREATHE_DUR_BY_PHASE[phase() - 1] * 0.6
+			var origin := head_root.global_position + _fire_dir * 1.6
+			if multiplayer.multiplayer_peer != null:
+				_play_fire.rpc(origin, _fire_dir, secs)
+			else:
+				_play_fire(origin, _fire_dir, secs)
+		_fire_damage()
+	else:
+		var f := smoothstep(0.0, 1.0, (t - 0.82) / 0.18)
+		head_root.global_transform = _look_transform(up.lerp(deep, f), deep + Vector3(0, -1, 0))
+	if _phase_t >= 1.0:
+		_fire_timer = _fire_interval()
+		_state = State.ROAM
+		_leg_arc = false  # slink away submerged to a different hole
+		_next_hole = _pick_hole(_cur_hole)
+		_leg_t = 0.0
+		_leg_dur = _compute_leg_dur()
+
+
+func _fire_damage() -> void:
+	var origin := head_root.global_position + _fire_dir * 1.6
+	for pl in get_tree().get_nodes_in_group("players"):
+		var p := pl as Node3D
+		if p == null or p.get("spectating") or not p.has_method("apply_knockback"):
+			continue
+		var to := Vector3(p.global_position.x - origin.x, 0.0, p.global_position.z - origin.z)
+		var dist := to.length()
+		if dist < 0.5 or dist > FIRE_RANGE:
+			continue
+		if _fire_dir.angle_to(to.normalized()) < FIRE_HALF_ANGLE:
+			p.apply_knockback(to.normalized(), FIRE_KB, FIRE_ROLL)  # blown back along the flame
+
+
+@rpc("authority", "call_local", "reliable")
+func _play_fire(origin: Vector3, dir: Vector3, secs: float) -> void:
+	var flame := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = FIRE_RANGE * tan(FIRE_HALF_ANGLE)  # wide mouth at the far end
+	cone.bottom_radius = 0.25                            # narrow at the muzzle
+	cone.height = FIRE_RANGE
+	cone.radial_segments = 10
+	flame.mesh = cone
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.45, 0.1, 0.55)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.55, 0.15)
+	mat.emission_energy_multiplier = 2.0
+	flame.material_override = mat
+	add_child(flame)
+	# The cylinder's axis is local +Y; point it down the fire direction, muzzle at origin.
+	flame.global_position = origin + dir * (FIRE_RANGE * 0.5)
+	flame.look_at_from_position(flame.global_position, flame.global_position + dir, Vector3.UP)
+	flame.rotate_object_local(Vector3(1, 0, 0), PI * 0.5)
+	flame.scale = Vector3(0.2, 1, 0.2)
+	var tween := create_tween()
+	tween.tween_property(flame, "scale", Vector3(1, 1, 1), 0.15)
+	tween.tween_interval(maxf(0.05, secs - 0.35))
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.2)
+	tween.tween_callback(flame.queue_free)
 
 
 func _tick_rising(delta: float) -> void:
@@ -267,10 +505,7 @@ func _tick_recoil(delta: float) -> void:
 			_drop_reward()
 		else:
 			_state = State.ROAM
-			_roam_timer = _roam_time()
-			_hop_i = 0
-			_t = 0.0
-			_recompute_hop_dur()
+			_start_roam()
 
 
 func _tick_defeated(delta: float) -> void:
@@ -325,80 +560,6 @@ func _play_strike() -> void:
 	_apply_flash()
 
 
-# --- splash-wave attack -------------------------------------------------------
-
-## Emit a wave when the head crosses the waterline near a pool: on dives from
-## phase 2, and on both dives and emerges once enraged.
-func _maybe_splash(pos: Vector3) -> void:
-	var y := pos.y
-	var py := _prev_head_y
-	_prev_head_y = y
-	if not armed:
-		return
-	var r: float = SPLASH_R_BY_PHASE[phase() - 1]
-	if r <= 0.0:
-		return
-	var line := water_y - 0.5
-	var down := py >= line and y < line
-	var up := py < line and y >= line
-	if down or (up and _enraged):
-		_splash(_nearest_pool(Vector2(pos.x, pos.z)), r, SPLASH_KB_BY_PHASE[phase() - 1])
-
-
-func _splash(center: Vector2, r: float, kb: float) -> void:
-	var c3 := Vector3(center.x, water_y, center.y)
-	for pl in get_tree().get_nodes_in_group("players"):
-		var p := pl as Node3D
-		if p == null or p.get("spectating"):
-			continue
-		var pp: Vector3 = p.global_position
-		if pp.y > water_y + 2.5 or pp.y < deep_y:
-			continue  # up on the ship / already fallen in
-		var flat := Vector2(pp.x - c3.x, pp.z - c3.z)
-		if flat.length() < r and p.has_method("apply_knockback"):
-			var dir := Vector3(flat.x, 0, flat.y)
-			if dir.length() < 0.1:
-				dir = Vector3.FORWARD
-			p.apply_knockback(dir.normalized(), kb)
-	if multiplayer.multiplayer_peer != null:
-		_play_splash.rpc(c3, r)
-	else:
-		_play_splash(c3, r)
-
-
-@rpc("authority", "call_local", "reliable")
-func _play_splash(center: Vector3, r: float) -> void:
-	var ring := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = 0.7
-	torus.outer_radius = 1.0
-	ring.mesh = torus
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(0.8, 0.95, 1.0, 0.7)
-	ring.material_override = mat
-	add_child(ring)
-	ring.global_position = center + Vector3(0, 0.1, 0)
-	ring.scale = Vector3(1, 0.3, 1)
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(ring, "scale", Vector3(r, 0.3, r), 0.6)
-	tween.tween_property(mat, "albedo_color:a", 0.0, 0.6)
-	tween.chain().tween_callback(ring.queue_free)
-
-
-func _nearest_pool(p: Vector2) -> Vector2:
-	var best: Vector2 = pools[0]
-	var bd := INF
-	for q in pools:
-		var d: float = p.distance_to(q)
-		if d < bd:
-			bd = d
-			best = q
-	return best
-
-
 # --- reward -------------------------------------------------------------------
 
 ## Server-only. Beaten: bring the draconite up from where the head sank, resting
@@ -411,47 +572,6 @@ func _drop_reward() -> void:
 		if n.get("carried_by") != -1:
 			continue
 		(n as Node3D).global_position = Vector3(_p0().x, -38.2, _p0().y - 5.0)
-
-
-# --- roam arc -----------------------------------------------------------------
-
-func _advance_roam(delta: float) -> void:
-	_t += delta / _hop_dur
-	while _t >= 1.0:
-		_t -= 1.0
-		if _want_surface:
-			_hop_i = _index_of_hop_into(0)
-		else:
-			_hop_i = (_hop_i + 1) % TOUR.size()
-		_recompute_hop_dur()
-
-
-func _index_of_hop_into(pool_idx: int) -> int:
-	for i in range(TOUR.size()):
-		if TOUR[(i + 1) % TOUR.size()] == pool_idx:
-			return i
-	return _hop_i
-
-
-func _recompute_hop_dur() -> void:
-	var a: Vector2 = pools[TOUR[_hop_i]]
-	var b: Vector2 = pools[TOUR[(_hop_i + 1) % TOUR.size()]]
-	_hop_dur = maxf(HOP_MIN_DUR, a.distance_to(b) / HOPSPEED_BY_PHASE[phase() - 1])
-
-
-func _head_pose_roam() -> Transform3D:
-	var a: Vector2 = pools[TOUR[_hop_i]]
-	var b: Vector2 = pools[TOUR[(_hop_i + 1) % TOUR.size()]]
-	var e := smoothstep(0.0, 1.0, _t)
-	var xz := a.lerp(b, e)
-	var arc := lerpf(-0.16, 1.16, _t) * PI
-	var y := maxf(deep_y, water_y + (apex_y - water_y) * sin(arc))
-	var pos := Vector3(xz.x, y, xz.y)
-	var tf := minf(_t + 0.03, 1.0)
-	var e2 := smoothstep(0.0, 1.0, tf)
-	var xz2 := a.lerp(b, e2)
-	var y2 := maxf(deep_y, water_y + (apex_y - water_y) * sin(lerpf(-0.16, 1.16, tf) * PI))
-	return _look_transform(pos, Vector3(xz2.x, y2, xz2.y))
 
 
 # --- key positions ------------------------------------------------------------
