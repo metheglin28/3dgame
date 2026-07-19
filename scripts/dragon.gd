@@ -39,7 +39,10 @@ const ARC_APEX_OVER := 2.5   # how high the low hop hump peaks above the waterli
 const SWIM_BOB := 2.0        # how far the submerged swim rises (stays below water)
 
 # Per-phase escalation (index = phase-1).
-const ROAM_BY_PHASE: Array[float] = [9.0, 7.0, 5.0]
+# The attack window GROWS each phase: phase 1 is X, phase 2 is 1.5X, phase 3 2X
+# -- so higher phases make you survive a longer, harder stretch before the hit.
+const ROAM_BASE := 9.0
+const ROAM_PHASE_MULT: Array[float] = [1.0, 1.5, 2.0]
 const EXPOSE_BY_PHASE: Array[float] = [4.5, 3.8, 3.0]
 const HOPSPEED_BY_PHASE: Array[float] = [16.0, 20.0, 26.0]  # m/s the head travels a leg
 
@@ -222,7 +225,7 @@ func phase() -> int:
 
 
 func _roam_time() -> float:
-	return ROAM_BY_PHASE[phase() - 1]
+	return ROAM_BASE * ROAM_PHASE_MULT[phase() - 1]
 
 
 func _expose_time() -> float:
