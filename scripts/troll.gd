@@ -10,6 +10,7 @@ extends "res://scripts/goblin.gd"
 
 const CLUB_KNOCKBACK := 22.0    # revolver is 16; the club is the hardest hit
 const CLUB_RANGE := 4.8         # a giant's reach
+const CLUB_VERTICAL := 4.0      # tall enough to club players on ledges, not through roofs
 const CLUB_COOLDOWN := 2.2      # slow, telegraphed swings
 const TROLL_CHASE_MULT := 0.85  # lumbering; slower than a goblin's scramble
 
@@ -30,6 +31,7 @@ func _ready() -> void:
 	arena_mode = true
 	add_to_group("troll")
 	attack_range = CLUB_RANGE
+	attack_vertical = CLUB_VERTICAL
 	attack_cooldown_time = CLUB_COOLDOWN
 	attack_knockback = CLUB_KNOCKBACK
 	chase_speed_mult = TROLL_CHASE_MULT
@@ -46,7 +48,10 @@ func _ai(delta: float) -> void:
 
 
 func _attack(_prey: Node3D, dir: Vector3) -> void:
-	_play_club.rpc()
+	if multiplayer.multiplayer_peer != null:
+		_play_club.rpc()
+	else:
+		_play_club()
 	_prey.apply_knockback(dir, attack_knockback)
 
 

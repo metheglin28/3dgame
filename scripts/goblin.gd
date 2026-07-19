@@ -14,8 +14,15 @@ extends "res://scripts/npc.gd"
 ## all be the same green.
 
 const DAGGER_KNOCKBACK := 7.0   # the player's sword is 11; daggers sting less
-const ATTACK_RANGE := 1.4
+const ATTACK_RANGE := 1.1       # a dagger: only what's right in front of it
 const ATTACK_COOLDOWN := 1.4
+# Only strike a target within this vertical band -- so a goblin can't stab a
+# player standing 4m above it on the cave roof (the reach used to ignore height
+# entirely). The troll, being huge, dials in a taller band.
+const ATTACK_VERTICAL := 1.6
+# ...and only if the target is roughly IN FRONT (dot of facing vs. direction);
+# 0.35 is a ~70-degree half-cone, so you can dodge by getting to its flank.
+const ATTACK_FRONT_DOT := 0.35
 const CHASE_SPEED_MULT := 1.5
 const AGGRO_RANGE := 14.0       # don't grind against walls chasing someone rooms away
 
@@ -45,6 +52,7 @@ const ARENA_AGGRO := 40.0  # the whole disc -- no dawdling once the fight is on
 # (the troll) can dial in a longer reach, harder knockback, and slower cadence
 # without reimplementing the chase brain.
 var attack_range := ATTACK_RANGE
+var attack_vertical := ATTACK_VERTICAL
 var attack_cooldown_time := ATTACK_COOLDOWN
 var attack_knockback := DAGGER_KNOCKBACK
 var chase_speed_mult := CHASE_SPEED_MULT
@@ -95,7 +103,10 @@ func _ai(delta: float) -> void:
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
-	if dist <= attack_range and _attack_cooldown <= 0.0:
+	# Strike only what's close, at roughly the same height, and in front of us.
+	var dy := absf(prey.global_position.y - global_position.y)
+	var facing := Vector3(sin(rotation.y), 0.0, cos(rotation.y))
+	if dist <= attack_range and dy <= attack_vertical and facing.dot(dir) >= ATTACK_FRONT_DOT and _attack_cooldown <= 0.0:
 		_attack_cooldown = attack_cooldown_time
 		_attack(prey, dir)
 
@@ -103,7 +114,10 @@ func _ai(delta: float) -> void:
 ## The actual hit: cosmetic swing + knockback. Split out so the troll can swing
 ## a club (and hit far harder) while reusing the whole chase loop above.
 func _attack(prey: Node3D, dir: Vector3) -> void:
-	_play_stab.rpc()
+	if multiplayer.multiplayer_peer != null:
+		_play_stab.rpc()
+	else:
+		_play_stab()
 	prey.apply_knockback(dir, attack_knockback)
 
 
