@@ -27,6 +27,12 @@ var camera_pitch: float = 0.0
 var current_interactable: Node = null
 var carried_item_path: NodePath = NodePath("")
 
+# The pickup this peer is currently carrying, excluded from our camera's spring
+# arm so the held prop can never shove the third-person camera in or clip it (a
+# gem held in front of you would otherwise catch the arm from certain angles and
+# block your view). Kept in sync each frame in _process; see _update_camera_exclusion.
+var _cam_excluded: RID
+
 ## Snowball-throwing power, granted/revoked by talking to the snowman in the
 ## snowy hills (see snowman.gd). Server-authoritative like everything else;
 ## broadcast to every peer via the same per-player snapshot as position, so
@@ -383,7 +389,29 @@ func _process(delta: float) -> void:
 	prompt_label.visible = current_interactable != null
 	if current_interactable:
 		prompt_label.text = "[E] " + current_interactable.get_prompt()
+	_update_camera_exclusion()
 	_update_round_hud()
+
+
+## Local player only. Keep the spring arm's exclusion list pointed at whatever
+## pickup this peer holds, so the camera never collides with it. Reconciled from
+## the item's carried_by (not carried_item_path, which isn't synced to clients),
+## so it works the same on the host and on remote peers and self-corrects through
+## every pickup, throw, death, and respawn.
+func _update_camera_exclusion() -> void:
+	var mine: Node = null
+	for it in get_tree().get_nodes_in_group("sync_items"):
+		if "carried_by" in it and it.carried_by == peer_id:
+			mine = it
+			break
+	var rid: RID = mine.get_rid() if mine else RID()
+	if rid == _cam_excluded:
+		return
+	if _cam_excluded.is_valid():
+		spring_arm.remove_excluded_object(_cam_excluded)
+	if rid.is_valid():
+		spring_arm.add_excluded_object(rid)
+	_cam_excluded = rid
 
 
 ## Draws the King of the Hill banner/scoreboard from the synced GameDirector
