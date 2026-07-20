@@ -573,6 +573,10 @@ func _physics_process(delta: float) -> void:
 			move_and_slide()
 			if is_on_floor():
 				_slamming = false
+				# A ground pound ends the bounce streak: the smash is the payoff for
+				# the height you built, so you start stacking again from the 1.5x base
+				# rather than carrying the accumulated multiplier into the next jump.
+				_bounce_mult = 1.0
 				_do_slam_impact()
 				_play_land_squash()
 			return
