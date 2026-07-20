@@ -910,6 +910,19 @@ func _build_cave() -> void:
 	_add_box(Vector3(39.4, -3.8, 93), Vector3(1.8, 1.4, 1), CAVE_ROCK)                    # header over the doorway
 	_add_box(Vector3(39.4, -3.45, 95.25), Vector3(6, 0.5, 5.5), CAVE_ROCK)                # roof
 
+	# Seal the doorway flanks. _add_corridor doesn't wall its final ~0.9m end pad,
+	# and the room walls sit ~1m off the corridor mouth, so each below-ground
+	# junction has an open gap on both sides of the doorway that players and
+	# goblins fall through. These jamb boxes plug the flanks; the last box bridges
+	# the tiny floor gap where hall 2's corridor floor stops short of the loot room.
+	_add_box(Vector3(40.65, -2.0, 71.6), Vector3(1.3, 5.0, 1.2), CAVE_ROCK)   # hall1->chamber, west jamb
+	_add_box(Vector3(43.75, -2.0, 71.6), Vector3(1.3, 5.0, 1.2), CAVE_ROCK)   # hall1->chamber, east jamb
+	_add_box(Vector3(43.0, -2.0, 82.45), Vector3(1.0, 5.0, 1.0), CAVE_ROCK)   # chamber->hall2, west jamb
+	_add_box(Vector3(45.8, -2.0, 82.45), Vector3(1.0, 5.0, 1.0), CAVE_ROCK)   # chamber->hall2, east jamb
+	_add_box(Vector3(38.0, -6.0, 92.1), Vector3(1.0, 5.0, 1.1), CAVE_ROCK)    # hall2->loot, west jamb
+	_add_box(Vector3(40.8, -6.0, 92.1), Vector3(1.0, 5.0, 1.1), CAVE_ROCK)    # hall2->loot, east jamb
+	_add_box(Vector3(39.4, -8.65, 92.75), Vector3(1.8, 0.4, 0.9), CAVE_FLOOR) # hall2->loot, floor bridge
+
 	# --- decor ---
 	_add_campfire(42.2, 77, -4.5)
 	# Trophy skull pile in the chamber's NW corner...
