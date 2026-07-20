@@ -208,6 +208,35 @@ const DUNGEON_FLOOR := Color(0.3, 0.28, 0.32, 1)
 const DUNGEON_CEILING_COLOR := Color(0.12, 0.11, 0.14, 1)
 const DUNGEON_PIT_COLOR := Color(0.07, 0.06, 0.09, 1)
 
+## The horse race track (Phase 1: the map only). A dirt racing loop out in the
+## void WEST of the farm, past the perimeter wall and beyond the tower (which
+## stands as a landmark on the approach). Reached through a gap cut in the west
+## wall, aligned with the farm's mid-z. The loop is DETERMINISTIC: a fixed ring
+## of control points, each at a hand-picked angle and radius, smoothed with
+## Chaikin into a rounded, irregular closed curve -- no runtime randomness, so
+## every peer builds the identical track. The tower at (-76,40) forced the loop
+## west of it; RACE_CONTROL's east radii stay small so the near (east) side
+## clears the tower's west face and the map wall behind it.
+const RACE_CENTER := Vector2(-112, 37)
+const RACE_TRACK_W := 6.0            # dirt width the horses run on
+const RACE_RAIL_H := 1.2             # containment rail height
+const RACE_RAIL_T := 0.3             # rail thickness
+const RACE_GATE_Z := Vector2(33, 41) # west-wall opening, z min..max
+const RACE_DIRT := Color(0.55, 0.4, 0.26, 1)
+const RACE_MEADOW := Color(0.5, 0.62, 0.34, 1)
+const RACE_RAIL_IN := Color(0.85, 0.83, 0.8, 1)  # white inner rail
+const RACE_RAIL_OUT := Color(0.5, 0.36, 0.2, 1)  # wood outer rail
+const RACE_FINISH_DARK := Color(0.1, 0.1, 0.1, 1)
+const RACE_FINISH_LIGHT := Color(0.9, 0.9, 0.9, 1)
+## (angle degrees, radius from RACE_CENTER). Irregular radii make it lumpy;
+## Chaikin rounds every corner into a smooth bend. Index 0 (due east, +x) is the
+## start/finish, the point nearest the entrance gate.
+const RACE_CONTROL: Array[Vector2] = [
+	Vector2(0, 18), Vector2(40, 20), Vector2(76, 25), Vector2(112, 22),
+	Vector2(150, 26), Vector2(188, 24), Vector2(224, 27), Vector2(262, 21),
+	Vector2(300, 24), Vector2(334, 19),
+]
+
 const LEVEL_A_ORIGIN := Vector2(-57.5, -57.5)
 const LEVEL_A_ROWS: Array[String] = [
 	"#.#.#####.###.#.#.#.#.#",
@@ -314,6 +343,7 @@ func _ready() -> void:
 	_build_forest()
 	_build_cave()
 	_build_farm()
+	_build_race_track()
 	_build_canyon_maze()
 	_build_snowy_hills()
 	_build_ground_collision()
@@ -648,7 +678,12 @@ func _build_perimeter_walls() -> void:
 	_add_box(Vector3((48.5 + h) * 0.5, 2, h), Vector3(h - 48.5, 4, 1), BOUNDARY_GRAY)
 	_add_box(Vector3(0, 2, -h), Vector3(h * 2.0, 4, 1), BOUNDARY_GRAY)
 	_add_box(Vector3(h, 2, 0), Vector3(1, 4, h * 2.0), BOUNDARY_GRAY)
-	_add_box(Vector3(-h, 2, 0), Vector3(1, 4, h * 2.0), BOUNDARY_GRAY)
+	# West wall is split around the race-track gate (RACE_GATE_Z): the farm exits
+	# through here into the void where the horse track sits (see _build_race_track).
+	var gz0: float = RACE_GATE_Z.x
+	var gz1: float = RACE_GATE_Z.y
+	_add_box(Vector3(-h, 2, (-h + gz0) * 0.5), Vector3(1, 4, gz0 + h), BOUNDARY_GRAY)
+	_add_box(Vector3(-h, 2, (gz1 + h) * 0.5), Vector3(1, 4, h - gz1), BOUNDARY_GRAY)
 
 
 func _build_quadrant_ground() -> void:
@@ -2113,3 +2148,130 @@ func _add_ring(pos: Vector3, radius: float, height: float, color: Color, cull: i
 	mat.cull_mode = cull
 	mesh.material_override = mat
 	add_child(mesh)
+
+
+# --- horse race track (Phase 1) ----------------------------------------------
+
+## A box segment laid between two world points a->b, its length running a->b and
+## its `thickness` across. Used for the track's containment rails, which follow
+## the curved loop as many short straight chords. Optional collision (rails have
+## it; purely cosmetic trim doesn't).
+func _add_seg_box(a: Vector3, b: Vector3, thickness: float, height: float, color: Color, collide: bool = true) -> void:
+	var flat_len := Vector2(b.x - a.x, b.z - a.z).length()
+	if flat_len < 0.01:
+		return
+	var mid := (a + b) * 0.5 + Vector3(0, height * 0.5, 0)
+	var body: Node3D = StaticBody3D.new() if collide else Node3D.new()
+	body.position = mid
+	if collide:
+		body.collision_layer = 1
+	add_child(body)
+	# look_at points local -Z at the target; the box's length lies on Z, so it
+	# spans a..b once we aim at b (kept level by matching the target's height).
+	body.look_at(Vector3(b.x, mid.y, b.z), Vector3.UP)
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(thickness, height, flat_len)
+	mesh.mesh = box
+	mesh.material_override = _make_material(color)
+	body.add_child(mesh)
+	if collide:
+		var col := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(thickness, height, flat_len)
+		col.shape = shape
+		body.add_child(col)
+
+
+## Chaikin corner-cutting on a CLOSED polygon: each pass replaces every point
+## with two points 1/4 and 3/4 along each edge, rounding the corners. Three
+## passes turn the coarse control ring into a smooth loop. Deterministic.
+func _chaikin_closed(pts: PackedVector2Array, iters: int) -> PackedVector2Array:
+	var cur := pts
+	for _pass in range(iters):
+		var nxt := PackedVector2Array()
+		var n := cur.size()
+		for j in range(n):
+			var p := cur[j]
+			var q := cur[(j + 1) % n]
+			nxt.append(p * 0.75 + q * 0.25)
+			nxt.append(p * 0.25 + q * 0.75)
+		cur = nxt
+	return cur
+
+
+func _build_race_track() -> void:
+	# The meadow platform: a flat slab filling the void from the west wall out
+	# past the loop, so there's ground to walk (and later ride) on. Top at y=0,
+	# flush with the map ground it meets at x=-60. The tower pokes up through it.
+	_add_box(Vector3(-100, -0.5, 37), Vector3(80, 1.0, 62), RACE_MEADOW)
+
+	# Two gateposts framing the wall opening, so the gap reads as a proper way out.
+	for pz: float in [RACE_GATE_Z.x, RACE_GATE_Z.y]:
+		_add_box(Vector3(-60, 2.4, pz), Vector3(1.2, 4.8, 1.2), FENCE_WOOD)
+	_add_box(Vector3(-60, 5.2, (RACE_GATE_Z.x + RACE_GATE_Z.y) * 0.5),
+		Vector3(1.2, 0.8, RACE_GATE_Z.y - RACE_GATE_Z.x + 1.2), FENCE_WOOD)
+	_add_sign(Vector3(-62, 0, RACE_GATE_Z.y + 2.0), "TO THE RACES")
+
+	# Build the smooth centreline from the control ring, then Chaikin it.
+	var ctrl := PackedVector2Array()
+	for cp: Vector2 in RACE_CONTROL:
+		var ang := deg_to_rad(cp.x)
+		ctrl.append(RACE_CENTER + Vector2(cos(ang), sin(ang)) * cp.y)
+	var loop := _chaikin_closed(ctrl, 3)
+	var n := loop.size()
+
+	# Offset the centreline to inner/outer edges along the per-point normal.
+	var inner := PackedVector2Array()
+	var outer := PackedVector2Array()
+	for i in range(n):
+		var prev := loop[(i - 1 + n) % n]
+		var nxt := loop[(i + 1) % n]
+		var tang := (nxt - prev).normalized()
+		var nrm := Vector2(-tang.y, tang.x)
+		inner.append(loop[i] - nrm * (RACE_TRACK_W * 0.5))
+		outer.append(loop[i] + nrm * (RACE_TRACK_W * 0.5))
+
+	# The dirt running surface: one flat ribbon mesh (visual only -- the meadow
+	# slab underneath carries the walking collision). Two triangles per segment.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(n):
+		var i2 := (i + 1) % n
+		var a := Vector3(inner[i].x, 0, inner[i].y)
+		var b := Vector3(outer[i].x, 0, outer[i].y)
+		var c := Vector3(outer[i2].x, 0, outer[i2].y)
+		var d := Vector3(inner[i2].x, 0, inner[i2].y)
+		for v: Vector3 in [a, b, c, a, c, d]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(v)
+	var surf := MeshInstance3D.new()
+	surf.mesh = st.commit()
+	surf.position = Vector3(0, 0.04, 0)
+	var dirt := _make_material(RACE_DIRT)
+	dirt.cull_mode = BaseMaterial3D.CULL_DISABLED
+	surf.material_override = dirt
+	add_child(surf)
+
+	# Containment rails hugging both edges, as short chords following the curve.
+	for i in range(n):
+		var i2 := (i + 1) % n
+		_add_seg_box(Vector3(inner[i].x, 0, inner[i].y), Vector3(inner[i2].x, 0, inner[i2].y),
+			RACE_RAIL_T, RACE_RAIL_H, RACE_RAIL_IN)
+		_add_seg_box(Vector3(outer[i].x, 0, outer[i].y), Vector3(outer[i2].x, 0, outer[i2].y),
+			RACE_RAIL_T, RACE_RAIL_H, RACE_RAIL_OUT)
+
+	# Start/finish, at index 0 (the point nearest the gate). A checkered strip
+	# across the track, two posts, and a banner overhead.
+	var si := Vector3(inner[0].x, 0.06, inner[0].y)
+	var so := Vector3(outer[0].x, 0.06, outer[0].y)
+	var tiles := 6
+	for t in range(tiles):
+		var f0 := float(t) / tiles
+		var f1 := float(t + 1) / tiles
+		var col := RACE_FINISH_DARK if t % 2 == 0 else RACE_FINISH_LIGHT
+		_add_seg_box(si.lerp(so, f0), si.lerp(so, f1), 0.9, 0.04, col, false)
+	_add_cylinder(Vector3(so.x, 2.5, so.z), 0.16, 0.16, 5.0, FENCE_WOOD)
+	_add_cylinder(Vector3(si.x, 2.5, si.z), 0.16, 0.16, 5.0, FENCE_WOOD)
+	var banner_mid := (si + so) * 0.5 + Vector3(0, 4.6, 0)
+	_add_box(banner_mid, Vector3(RACE_TRACK_W + 1.0, 1.2, 0.3), BARN_RED)
