@@ -573,11 +573,11 @@ func _physics_process(delta: float) -> void:
 			move_and_slide()
 			if is_on_floor():
 				_slamming = false
-				# A ground pound ends the bounce streak: the smash is the payoff for
-				# the height you built, so you start stacking again from the 1.5x base
-				# rather than carrying the accumulated multiplier into the next jump.
-				_bounce_mult = 1.0
-				_do_slam_impact()
+				# A real ground pound ends the bounce streak: the smash is the payoff
+				# for the height you built, so you start stacking again from the 1.5x
+				# base. A "fake" smash (too shallow to land an impact) keeps the streak.
+				if _do_slam_impact():
+					_bounce_mult = 1.0
 				_play_land_squash()
 			return
 
@@ -765,10 +765,13 @@ func respawn_at(pos: Vector3) -> void:
 
 ## Server-only. The golden-ears ground pound landed: knock back everyone near
 ## the impact, harder the farther we fell (measured from where the dive began).
-func _do_slam_impact() -> void:
+## Returns true if a real smash landed (drop past the minimum), false if it was
+## too shallow to count -- the caller uses that to decide whether to spend the
+## bounce streak.
+func _do_slam_impact() -> bool:
 	var drop := _slam_start_y - global_position.y
 	if drop < SLAM_MIN_DROP:
-		return
+		return false
 	var power := clampf(SLAM_BASE_KB + SLAM_KB_PER_M * drop, SLAM_MIN_KB, SLAM_MAX_KB)
 	var origin := global_position
 	var characters: Array[Node] = []
@@ -799,6 +802,7 @@ func _do_slam_impact() -> void:
 		var pd := (to * Vector3(1, 0, 1)).normalized()
 		t.apply_central_impulse((pd + Vector3.UP * 0.7).normalized() * power * t.mass)
 	_play_slam.rpc(origin, power)
+	return true
 
 
 ## Server-only. Called by the kill plane when this player falls out during a boss
