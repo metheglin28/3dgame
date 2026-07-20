@@ -7,7 +7,18 @@ extends RigidBody3D
 @export var throw_force := 9.0
 @export var pickup_prompt := "Pick Up" # what the E-prompt says while it's on the ground
 
-var carried_by: int = -1 # peer_id, or -1 if not held
+# peer_id, or -1 if not held. Toggling this also toggles the body's collision:
+# while carried, the shape is disabled so the prop -- pinned in front of the
+# player each frame -- doesn't act as a static obstacle the carrier shoves
+# against (that drag is what made heavy props like the gem feel slow to haul).
+# The setter fires on every path that drops the item (throw, death, respawn) and
+# on the client snapshot, so collision is always restored when it hits the ground.
+var carried_by: int = -1:
+	set(v):
+		carried_by = v
+		var cs := get_node_or_null("CollisionShape3D")
+		if cs:
+			cs.disabled = (v != -1)
 
 # Latest server snapshot, glided toward in _process on non-server peers
 # (same smoothing pattern as the player -- see player.gd).
