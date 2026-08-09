@@ -10,6 +10,24 @@ const SPRINT_MULTIPLIER := 1.7
 const ACCEL := 10.0
 const DECEL := 12.0
 const JUMP_VELOCITY := 6.5
+
+# --- horse racing (Mario-Kart-ish handling) ---------------------------------
+# While `riding`, the normal walk is replaced by a kart model: throttle builds
+# speed toward a top faster than a sprint, steering rotates the heading (only
+# while moving -- no pivoting in place), and the camera trails behind. A visual
+# horse (scenes/horse.tscn) is attached under the body and the rider mesh is
+# lifted onto its saddle. The race flow sets `riding` on teleport-in and clears
+# it on teleport-out; nothing here mounts on its own.
+const HORSE_SCENE := preload("res://scenes/horse.tscn")
+const HORSE_TOP := 16.0          # top speed (sprint on foot is ~9.4)
+const HORSE_ACCEL := 12.0        # throttle-up rate
+const HORSE_BRAKE := 22.0        # braking / into-reverse rate
+const HORSE_REVERSE := 5.0       # top reverse speed
+const HORSE_FRICTION := 9.0      # coast-down when off throttle
+const HORSE_TURN := 2.3          # rad/s heading change at full steer
+const RIDE_SEAT_Y := 2.05        # mesh Y while seated (walking base is MESH_BASE_Y)
+const MESH_BASE_Y := 0.9
+const RIDE_MESH_SCALE := 0.8
 const COYOTE_TIME := 0.15
 const JUMP_BUFFER_TIME := 0.15
 const MOUSE_SENSITIVITY := 0.0035
@@ -26,6 +44,19 @@ var camera_yaw: float = 0.0
 var camera_pitch: float = 0.0
 var current_interactable: Node = null
 var carried_item_path: NodePath = NodePath("")
+
+# True while mounted for a race. Server-authoritative, synced in the snapshot;
+# the setter (re)builds the visual mount on every peer so the horse appears and
+# the rider lifts onto the saddle. See _ride_physics and _update_mount.
+var riding: bool = false:
+	set(value):
+		if value == riding:
+			return
+		riding = value
+		_update_mount()
+var _ride_speed: float = 0.0    # server: signed speed along the heading
+var _ride_heading: float = 0.0  # server: yaw the horse is pointed
+var _horse: Node3D = null       # the attached visual horse (all peers)
 
 # The pickup this peer is currently carrying, excluded from our camera's spring
 # arm so the held prop can never shove the third-person camera in or clip it (a
@@ -370,8 +401,17 @@ func _process(delta: float) -> void:
 	# whole map. Runs for every player node; the local one sits at distance ~0
 	# and so stays fully visible.
 	name_label.modulate.a = GameState.label_alpha(global_position)
+	# Keep the visual horse pointed the way the rider mesh faces (every peer).
+	if _horse != null:
+		_horse.rotation.y = mesh.rotation.y
 	if peer_id != multiplayer.get_unique_id():
 		return
+	# While racing the camera trails behind the horse instead of mouse-looking, so
+	# steering reads naturally (Mario-Kart chase cam). mesh.rotation.y is the synced
+	# heading on every peer.
+	if riding:
+		camera_yaw = lerp_angle(camera_yaw, mesh.rotation.y, 1.0 - exp(-6.0 * delta))
+		camera_pivot.rotation.y = camera_yaw
 	if spectating:
 		_update_spectator_cam()
 		_update_round_hud()
@@ -553,6 +593,11 @@ func _physics_process(delta: float) -> void:
 		_time_since_land = 0.0 if not _was_on_floor else _time_since_land + delta
 	_was_on_floor = is_on_floor()
 
+	# Racing: kart handling fully replaces the walk (and everything below it).
+	if riding:
+		_ride_physics(delta)
+		return
+
 	if ragdolled:
 		# No control while flying: gravity and momentum only, tumbling all the
 		# way, then skid out and stand back up.
@@ -654,6 +699,57 @@ func _physics_process(delta: float) -> void:
 		var item := get_node_or_null(carried_item_path)
 		if item:
 			item.global_transform = hold_point.global_transform
+
+
+## Server-only kart handling for a mounted racer. Throttle (W/S) builds a signed
+## speed toward the top; steer (A/D) rotates the heading, but only while actually
+## rolling so you can't spin on the spot; the body then slides along the heading
+## with gravity keeping it on the track. The heading is written to mesh.rotation.y
+## so it rides the same "rot" snapshot field the walk uses -- clients turn the
+## horse from that for free.
+func _ride_physics(delta: float) -> void:
+	var throttle := -_pending_move.y  # W -> input.y = -1 -> forward
+	var steer := _pending_move.x      # A/D
+	if throttle > 0.05:
+		_ride_speed = move_toward(_ride_speed, HORSE_TOP * throttle, HORSE_ACCEL * delta)
+	elif throttle < -0.05:
+		_ride_speed = move_toward(_ride_speed, -HORSE_REVERSE, HORSE_BRAKE * delta)
+	else:
+		_ride_speed = move_toward(_ride_speed, 0.0, HORSE_FRICTION * delta)
+	# Turn rate fades to nothing at a standstill (and flips when reversing, like a
+	# real vehicle backing up). Scaled by how much of top speed you're carrying.
+	var roll := clampf(_ride_speed / HORSE_TOP, -1.0, 1.0)
+	if absf(_ride_speed) > 0.3:
+		_ride_heading -= steer * HORSE_TURN * delta * roll
+	mesh.rotation.y = _ride_heading
+	# mesh yaw 0 faces -Z (see the walk's atan2(-x,-z)); forward for heading h is
+	# therefore (-sin h, -cos h).
+	var fwd := Vector3(-sin(_ride_heading), 0.0, -cos(_ride_heading))
+	velocity.x = fwd.x * _ride_speed
+	velocity.z = fwd.z * _ride_speed
+	move_and_slide()
+
+
+## Build or tear down the visual mount when `riding` flips (runs on every peer via
+## the snapshot-synced setter). The horse is parented under the body at the feet;
+## the rider mesh lifts onto the saddle and shrinks a touch so it reads as seated.
+func _update_mount() -> void:
+	if riding:
+		_ride_heading = mesh.rotation.y
+		_ride_speed = 0.0
+		if _horse == null:
+			_horse = HORSE_SCENE.instantiate()
+			add_child(_horse)
+		if is_node_ready():
+			mesh.position.y = RIDE_SEAT_Y
+			mesh.scale = Vector3.ONE * RIDE_MESH_SCALE
+	else:
+		if _horse != null:
+			_horse.queue_free()
+			_horse = null
+		if is_node_ready():
+			mesh.position.y = MESH_BASE_Y
+			mesh.scale = Vector3.ONE
 
 
 ## Godot reports sender id 0 (not a real remote sender) when an RPC ends up being
@@ -1108,6 +1204,7 @@ func apply_remote_state(state: Dictionary) -> void:
 	mesh.rotation.x = tumble
 	set_spectating(state["spec"])
 	set_slow_tint(state["slow"])
+	riding = state.get("riding", false)  # setter builds/removes the visual mount
 
 
 func _smooth_to_net_state(delta: float) -> void:
@@ -1130,6 +1227,10 @@ func look_direction() -> Vector3:
 
 
 func _update_squash_stretch(delta: float) -> void:
+	# No landing squash while mounted -- it tweens mesh.scale back to ONE and would
+	# fight the seated shrink (and there's no "landing" on a horse anyway).
+	if riding:
+		return
 	# global_position.y only actually changes once per physics tick (for the
 	# server) or once per incoming snapshot (for everyone else) -- both much
 	# rarer than _process's idle-rate delta. Comparing against the last frame
