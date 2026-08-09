@@ -1,3 +1,6 @@
-# Godot 4+ local cache and import artifacts (regenerated automatically, machine-specific)
+# Godot 4+ local cache (regenerated automatically, machine-specific)
 .godot/
-*.import
+
+# NOTE: Godot 4 .import sidecars ARE committed -- they pin each asset's import
+# settings and UID so resource references resolve the same on every machine and
+# in headless verification. (Only the .godot/ cache above is machine-specific.)
