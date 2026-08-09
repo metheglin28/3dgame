@@ -224,7 +224,7 @@ const RACE_Z1 := 90.0    # north edge (past the cave chamber roof at z~82)
 const RACE_CORNER := 22.0
 const RACE_TRACK_W := 9.0             # wide enough for several racers abreast
 const RACE_FENCE_H := 1.1
-const RACE_DIRT := Color(0.5, 0.36, 0.24, 1)
+const RACE_DIRT := Color(0.8, 0.7, 0.5, 1)  # trodden sand
 const RACE_FINISH_DARK := Color(0.12, 0.12, 0.12, 1)
 const RACE_FINISH_LIGHT := Color(0.9, 0.9, 0.9, 1)
 
